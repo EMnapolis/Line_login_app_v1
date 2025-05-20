@@ -90,7 +90,7 @@ if menu == "🖥 หน้าต่างทำงาน":
 
     if "user_id" in st.session_state:
         st.success(f"🎉 คุณเข้าสู่ระบบแล้วในชื่อ {st.session_state['display_name']}")
-        status = st.session_state.get("status", "PENDING")
+        status = st.session_state.get("status")
 
         if status != "APPROVED":
             st.warning("⚠️ คุณยังไม่ได้รับสิทธิ์ใช้งาน กรุณารอการอนุมัติ")
