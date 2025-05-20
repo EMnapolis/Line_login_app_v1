@@ -16,4 +16,4 @@ def render_page():
         st.stop()
 
     # ✅ ส่วนที่แสดง UI จริง
-    st.title("ส่วนที่แสดง UI จริง")
+    st.info("...Coming soon...")
