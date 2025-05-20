@@ -13,10 +13,10 @@ from Call_Recording_Upload.utils import (
 def render_page():
     st.title("🎙️ ระบบ Call Recording Upload")
 
-    # # ✅ ตรวจ login และสิทธิ์
-    # if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
-    #     st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
-    #     st.stop()
+    # ✅ ตรวจ login และสิทธิ์
+    if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
+        st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
+        st.stop()
 
     # ตั้งค่าหน้าจอ
     st.set_page_config(page_title="Python Recording Upload", layout="wide")
