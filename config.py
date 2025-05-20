@@ -7,5 +7,4 @@ CHANNEL_SECRET = "6f3d52bf5641b5d48bf70a23c8332f86"
 REDIRECT_URI = "https://lineappappv1-fianqtjgevmrlfgve3ynub.streamlit.app"
 STATE = "my-login-session"  # ค่า state สำหรับความปลอดภัยของ OAuth2
 
-
 ACCESS_LOG_FILE = "access_log.txt"
