@@ -12,14 +12,12 @@ from Call_Recording_Upload.utils import (
 
 #def render_page():
 st.title("🎙️ ระบบ Call Recording Upload")
-
-# ✅ ตรวจ login และสิทธิ์
-if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
-    st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
-    st.stop()
-
-# ตั้งค่าหน้าจอ
-st.set_page_config(page_title="Python Recording Upload", layout="wide")
+# #---------------
+# # ✅ ตรวจ login และสิทธิ์
+# if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
+#     st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
+#     st.stop()
+# #---------------
 
 # Header ด้านบนขวา
 st.markdown("""
@@ -32,7 +30,7 @@ st.markdown("""
 menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำงาน", "คุณสมบัติของโปรแกรม", "วิธีติดตั้ง และการใช้งาน"])
 
 if menu == "หน้าคำสั่งทำงาน":
-    st.title("VillaMarket Call Recording Processor")
+    #st.title("VillaMarket Call Recording Processor")
 
     tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
                               value="", type="password",
