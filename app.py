@@ -3,8 +3,6 @@
 # Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
 
 import os, sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "Call_Recording_Upload"))
-from main import render_call_upload
 
 st.set_page_config(page_title="Line Login + Modules", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
@@ -234,7 +232,7 @@ elif menu == "🖥 หน้าต่างเลือก  APP":
 # เมนู: ระบบ Call Recording Upload
 # -------------------------
 elif menu == "🎙️ ระบบ Call Recording Upload":
-    render_call_upload()
+    st.title("🎙️ ระบบ Call Recording Upload")
 
 # -------------------------
 # เมนู: คุณสมบัติของโปรแกรม
