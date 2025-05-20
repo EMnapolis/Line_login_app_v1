@@ -100,7 +100,8 @@ else:
     menu_options = base_menu
 
 # ✅ ผูกเมนูเข้ากับ session_state
-st.sidebar.radio("เลือกเมนู", options=menu_options, key="menu")
+default_index = menu_options.index(st.session_state["menu"]) if "menu" in st.session_state else 0
+st.sidebar.radio("เลือกเมนู", options=menu_options, index=default_index, key="menu")
 menu = st.session_state["menu"]
 
 # ----------------------------
