@@ -3,12 +3,9 @@
 # Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
 
 import streamlit as st
-from urllib.parse import parse_qs, urlparse, unquote
-from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
-from line_api import get_token, get_profile, send_message_to_user
-from access_manager import read_access_log, write_or_update_user, get_approvers, update_user_status
+from Call_Recording_Upload.main import render_page as render_call_upload
 
-st.set_page_config(page_title="LINE Login App", layout="centered")
+st.set_page_config(page_title="Line Login + Modules", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 # ----------------------------
@@ -73,6 +70,7 @@ menu = st.sidebar.radio(
     "เลือกเมนู",
     [
         "🖥 หน้าต่างทำงาน",
+        "🎙️ ระบบ Call Recording Upload",
         "📌 คุณสมบัติของโปรแกรม",
         "📖 วิธีใช้งานโปรแกรม",
         "🧩 การปรับแต่ง LINE Developers",
@@ -230,6 +228,12 @@ elif menu == "🖥 หน้าต่างเลือก  APP":
         st.markdown("- 🤖 [เข้าสู่แชทบอท](apps/chatbot/main.py)")
         st.markdown("- 🎧 [ระบบ IVR อัตโนมัติ](apps/ivr/main.py)")
         st.markdown("- 📊 ระบบรายงานอื่นๆ (Coming soon)")
+
+# -------------------------
+# เมนู: ระบบ Call Recording Upload
+# -------------------------
+elif menu == "🎙️ ระบบ Call Recording Upload":
+    def render_call_upload()
 
 # -------------------------
 # เมนู: คุณสมบัติของโปรแกรม
