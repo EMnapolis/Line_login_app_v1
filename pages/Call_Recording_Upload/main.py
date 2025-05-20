@@ -2,7 +2,7 @@
 import streamlit as st
 from utils import process_audio
 
-def render_page():
+def render_call_upload():
     st.title("🎙️ ระบบ Call Recording Upload")
 
     # ✅ ตรวจว่า login แล้วหรือยัง

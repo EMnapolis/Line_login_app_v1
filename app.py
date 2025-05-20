@@ -3,7 +3,7 @@
 # Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
 
 import streamlit as st
-from Call_Recording_Upload.main import render_page as render_call_upload
+from Call_Recording_Upload.main import *
 
 st.set_page_config(page_title="Line Login + Modules", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
