@@ -118,7 +118,7 @@ if menu == "🖥 หน้าต่างทำงาน":
 
         # ✅ เมนูเรียกโมดูลย่อยในอนาคต
         # ✅ Shortcut ไปยังเมนู Call Upload
-        st.page_link("pages/1_Call_Recording_Upload", label="🎙️ ระบบ Call Recording Upload")
+        st.page_link("1_Call_Recording_Upload", label="🎙️ ระบบ Call Recording Upload")
         st.markdown("- 🎧 [ระบบ Google Transcribe](Coming soon)")
         st.markdown("- 🤖 [เข้าสู่แชทบอท](Coming soon)")
 
