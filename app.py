@@ -41,24 +41,30 @@ if "user_id" not in st.session_state and code:
         st.error("❌ ดึง access_token ไม่สำเร็จ")
     else:
         profile = get_profile(access_token)
-        st.write("👤 profile:", profile)
-
         user_id = profile.get("userId", "")
         display_name = profile.get("displayName", "")
         picture_url = profile.get("pictureUrl", "")
 
         if user_id:
             try:
-                write_or_update_user(user_id, display_name, picture_url, status="PENDING")
-
                 users = read_access_log()
-                user_status = users.get(user_id, {}).get("status", "PENDING")
+                user_info = users.get(user_id)
+
+                if user_info is None:
+                    # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
+                    write_or_update_user(user_id, display_name, picture_url, status="PENDING")
+                    user_status = "PENDING"
+                else:
+                    # 🟢 ผู้ใช้เดิม → ดึง status เดิม
+                    user_status = user_info.get("status", "PENDING")
+                    # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
+                    write_or_update_user(user_id, display_name, picture_url, status=user_status)
 
                 st.session_state["user_id"] = user_id
                 st.session_state["display_name"] = display_name
                 st.session_state["status"] = user_status
 
-                st.success(f"🎉 ยินดีต้อนรับ {display_name}")
+                st.success(f"🎉 ยินดีต้อนรับ {display_name} ({user_status})")
             except Exception as e:
                 st.error(f"❌ ไม่สามารถบันทึกผู้ใช้: {e}")
         else:
