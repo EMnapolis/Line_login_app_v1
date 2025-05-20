@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse, unquote, urlencode
 from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import read_access_log, write_or_update_user, get_approvers, update_user_status
+#--------------
 
 st.set_page_config(page_title="Line Login App", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
@@ -87,7 +88,6 @@ base_menu = [
 
 # เมนูเพิ่มเติมสำหรับผู้ login แล้ว
 private_menu = [
-    "🎙️ ระบบ Call Recording Upload",
     "🧾 ตรวจสอบรายชื่อผู้ใช้งาน",
     "📄 ขอดู access_log ไฟล์",
     "🧩 การปรับแต่ง LINE Developers"
@@ -118,9 +118,7 @@ if menu == "🖥 หน้าต่างทำงาน":
 
         # ✅ เมนูเรียกโมดูลย่อยในอนาคต
         # ✅ Shortcut ไปยังเมนู Call Upload
-        if st.button("🎙️ ไปยังระบบ Call Recording Upload"):
-            st.session_state["menu"] = "🎙️ ระบบ Call Recording Upload"
-            st.rerun()
+        st.page_link("pages/1_Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
         st.markdown("- 🎧 [ระบบ Google Transcribe](Coming soon)")
         st.markdown("- 🤖 [เข้าสู่แชทบอท](Coming soon)")
 
@@ -251,12 +249,6 @@ elif menu == "🔐 เข้าสู่ระบบ LINE (ตรวจสอบ
 
     # ใช้ปุ่มแบบปลอดภัยของ Streamlit
     st.link_button("🔗 เข้าสู่ระบบด้วย LINE", auth_url)
-
-# -------------------------
-# เมนู: ระบบ Call Recording Upload
-# -------------------------
-elif menu == "🎙️ ระบบ Call Recording Upload":
-    st.title("🎙️ ระบบ Call Recording Upload")
 
 # -------------------------
 # เมนู: คุณสมบัติของโปรแกรม
