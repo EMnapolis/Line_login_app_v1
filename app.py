@@ -2,8 +2,9 @@
 # =============================
 # Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
 
-import streamlit as st
-from Call_Recording_Upload.main import render_call_upload
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "Call_Recording_Upload"))
+from main import render_call_upload
 
 st.set_page_config(page_title="Line Login + Modules", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
