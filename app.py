@@ -95,7 +95,7 @@ if menu == "🖥 หน้าต่างทำงาน":
         st.subheader("🧠 เลือกโปรแกรมที่ต้องการใช้งาน")
 
         # ✅ เมนูเรียกโมดูลย่อยในอนาคต
-        st.markdown("- 🎙️ [ระบบ Call Recording Upload](/apps/Call_Recording_Upload/main.py)")
+        st.page_link("pages/1_Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
         st.markdown("- 🎧 [ระบบ Google Transcribe](Coming soon)")
         st.markdown("- 🤖 [เข้าสู่แชทบอท](Coming soon)")
 
