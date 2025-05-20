@@ -1,9 +1,16 @@
+# import streamlit as st
+
+# st.set_page_config(page_title="อัปโหลดไฟล์เสียง", page_icon="🎧")
+
+# st.title("🎧 ระบบอัปโหลด Call Recording")
+# st.write("หน้านี้ใช้สำหรับอัปโหลดไฟล์บันทึกเสียง")
+
 # pages/1_Call_Recording_Upload.py
 import streamlit as st
 import pandas as pd
 import datetime
 import os
-from Call_Recording_Upload.utils import (
+from call_upload_utils import (
     fetch_json, process_records, load_sent_rec_ids,
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id, log_failed
@@ -11,6 +18,7 @@ from Call_Recording_Upload.utils import (
 
 
 #def render_page():
+st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🎙️ ระบบ Call Recording Upload")
 # #---------------
 # # ✅ ตรวจ login และสิทธิ์

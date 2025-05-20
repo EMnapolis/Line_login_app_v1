@@ -1,16 +1,16 @@
 # app.py
 # =============================
-# Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
-
 import streamlit as st
 from urllib.parse import parse_qs, urlparse, unquote, urlencode
 from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import read_access_log, write_or_update_user, get_approvers, update_user_status
-#--------------
 
-st.set_page_config(page_title="Line Login App", layout="centered")
+st.set_page_config(page_title="Line Login App", page_icon="✅")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
+
+st.title("📋 เมนูหลัก")
+st.page_link("pages/Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
 
 # ----------------------------
 # ✅ อ่าน code จาก query string โดยใช้ st.query_params อย่างเดียว
@@ -109,31 +109,6 @@ menu = st.session_state["menu"]
 # ----------------------------
 if menu == "🖥 หน้าต่างทำงาน":
     st.title("🔐 ระบบเข้าสู่ระบบด้วย LINE")
-
-    if "user_id" in st.session_state:
-        st.success(f"🎉 คุณเข้าสู่ระบบแล้วในชื่อ {st.session_state['display_name']}")
-        status = st.session_state.get("status")
-
-        st.subheader("🧠 เลือกโปรแกรมที่ต้องการใช้งาน")
-
-        # ✅ เมนูเรียกโมดูลย่อยในอนาคต
-        # ✅ Shortcut ไปยังเมนู Call Upload
-        st.page_link("1_Call_Rec.py", label="🎙️ ระบบ Call Recording Upload")
-        st.markdown("- 🎧 [ระบบ Google Transcribe](Coming soon)")
-        st.markdown("- 🤖 [เข้าสู่แชทบอท](Coming soon)")
-
-    else:
-        params = {
-            "response_type": "code",
-            "client_id": CHANNEL_ID,
-            "redirect_uri": REDIRECT_URI,
-            "state": STATE,
-            "scope": "profile openid",
-            "bot_prompt": "aggressive"
-        }
-        from urllib.parse import urlencode
-        login_url = f"https://access.line.me/oauth2/v2.1/authorize?{urlencode(params)}"
-        st.link_button("🔗 เข้าสู่ระบบด้วย LINE", login_url)
 
 # ----------------------------
 # เมนู: ตรวจสอบรายชื่อผู้ใช้งาน
@@ -275,7 +250,6 @@ elif menu == "📌 คุณสมบัติของโปรแกรม":
     - ✅ ปรับแต่งหน้าต่าง login ได้เองด้วย Streamlit
     - ✅ พร้อมสำหรับนำไปต่อยอดกับระบบภายในองค์กร
     """)
-
 
 # -------------------------
 # เมนู: วิธีใช้งานโปรแกรม
