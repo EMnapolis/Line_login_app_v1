@@ -2,9 +2,11 @@
 # =============================
 # Streamlit + LINE Login พร้อมใช้งาน โดยใช้ st.query_params อย่างเดียว
 
-import os, sys
+import streamlit as st
+from datetime import datetime
+import os
 
-st.set_page_config(page_title="Line Login + Modules", layout="centered")
+st.set_page_config(page_title="Line Login App", layout="centered")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 # ----------------------------
