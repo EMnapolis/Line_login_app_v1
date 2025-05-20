@@ -99,8 +99,9 @@ if "user_id" in st.session_state and st.session_state.get("status") == "APPROVED
 else:
     menu_options = base_menu
 
-# แสดงเมนู
-menu = st.sidebar.radio("เลือกเมนู", menu_options)
+# ✅ ผูกเมนูเข้ากับ session_state
+st.sidebar.radio("เลือกเมนู", options=menu_options, key="menu")
+menu = st.session_state["menu"]
 
 # ----------------------------
 # เมนู: หน้าต่างทำงาน
@@ -115,7 +116,10 @@ if menu == "🖥 หน้าต่างทำงาน":
         st.subheader("🧠 เลือกโปรแกรมที่ต้องการใช้งาน")
 
         # ✅ เมนูเรียกโมดูลย่อยในอนาคต
-        st.markdown("- 🎙️ ระบบ Call Recording Upload(Coming soon)")
+        # ✅ Shortcut ไปยังเมนู Call Upload
+        if st.button("🎙️ ไปยังระบบ Call Recording Upload"):
+            st.session_state["menu"] = "🎙️ ระบบ Call Recording Upload"
+            st.rerun()
         st.markdown("- 🎧 [ระบบ Google Transcribe](Coming soon)")
         st.markdown("- 🤖 [เข้าสู่แชทบอท](Coming soon)")
 
