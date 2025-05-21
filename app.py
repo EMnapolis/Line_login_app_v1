@@ -10,7 +10,7 @@ st.set_page_config(page_title="Line Login App", page_icon="✅")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 st.title("📋 เมนูหลัก")
-st.page_link("pages/Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
+#st.page_link("pages/Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
 
 # ----------------------------
 # ✅ อ่าน code จาก query string โดยใช้ st.query_params อย่างเดียว
@@ -177,7 +177,7 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
         status = info.get("status", "PENDING")
         emoji = status_emoji.get(status, "⚪")
 
-        col1, col2, col3, col4 = st.columns([1, 4, 2, 2])
+        col1, col2, col3, col4 = st.columns([1, 7, 2, 2])
         with col1:
             st.markdown(emoji)
         with col2:
