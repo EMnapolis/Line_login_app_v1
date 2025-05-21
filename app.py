@@ -95,7 +95,7 @@ private_menu = [
 
 # รวมเมนูตามสิทธิ์
 if "user_id" in st.session_state and st.session_state.get("status") == "APPROVED":
-    menu_options = base_menu + private_menu
+    menu_options = private_menu + base_menu
 else:
     menu_options = base_menu
 
