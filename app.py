@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse, unquote, urlencode
 import streamlit as st
 import sqlite3
 
-from config import CHANNEL_ID, CHANNEL_SECRET, DATABASE_RECORDING_UPLOAD_NAME, REDIRECT_URI, STATE, DATABASE_FOLDER
+from config # import CHANNEL_ID, CHANNEL_SECRET, DATABASE_RECORDING_UPLOAD_NAME, REDIRECT_URI, STATE, DATABASE_FOLDER
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import read_access_log, write_or_update_user, get_approvers, update_user_status
 
