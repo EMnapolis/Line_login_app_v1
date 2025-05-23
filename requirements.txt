@@ -1,9 +1,0 @@
-# ไฟล์: requirements.txt
-# =============================
-# รายชื่อไลบรารีที่จำเป็นสำหรับติดตั้ง
-
-streamlit
-requests
-python-dotenv
-sqlite3
-tabulate
