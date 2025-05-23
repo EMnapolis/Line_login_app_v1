@@ -6,7 +6,6 @@ import json
 import html
 from datetime import datetime, timedelta
 
-
 # สร้างโฟลเดอร์สำหรับเก็บ log และไฟล์ชั่วคราว
 LOG_DIR = "logs"
 TMP_DIR = "tmp"
@@ -93,6 +92,7 @@ def create_chat_room(phone, chat_token, contact_id):
     }
     res = requests.post(url, headers=headers, json=body)
     return res.json().get("data", {}).get("room_id")
+
 
 def json_helper(fileurl):
     structure = {

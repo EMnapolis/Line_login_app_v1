@@ -15,13 +15,15 @@ from call_upload_utils import (
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id, log_failed
 )
-
+from config import CHAT_TOKEN
 
 #def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🎙️ ระบบ Call Recording Upload")
 #---------------
 # ✅ ตรวจ login และสิทธิ์
+
+# Login Test
 if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
     st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
     st.stop()
@@ -47,7 +49,7 @@ if menu == "หน้าคำสั่งทำงาน":
     # st.markdown("<small><b>ChatCenter Access Token (chat_token)</b></small>", unsafe_allow_html=True)
     with st.expander("🔐 ขยายเพื่อแก้ไข Chat Token และ Contact ID", expanded=False):
         chat_token = st.text_input("ChatCenter Access Token (chat_token)",
-                                   value="xxxxx",
+                                   value=CHAT_TOKEN,
                                    type="password")
         contact_id = st.number_input("Contact ID", value=3)
     col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล
@@ -123,7 +125,6 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.session_state["df_new"] = df_new
                     st.session_state["ready_to_process"] = True
                     st.success("🎯 พบ recId และพร้อมประมวลผล")
-
 
 # ตรวจสอบว่า session_state มีคีย์ "ready_to_process" และค่าคือ True หรือไม่ (มีข้อมูลพร้อมให้ประมวลผล)
 if st.session_state.get("ready_to_process") and not st.session_state.get("processed"): #เงื่อนไข and น่าจะทำให้คลิีกปุ่มแล้วไม่ทำงานอะไร
