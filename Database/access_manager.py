@@ -2,7 +2,7 @@ import sqlite3
 import sys 
 import os
 
-from tabulate import tabulate 
+# from tabulate import tabulate 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from config import DATABASE_RECORDING_UPLOAD_NAME, DATABASE_FOLDER
@@ -58,25 +58,25 @@ def write_or_update_user_db(user_id, display_name, picture_url, status="PENDING"
     print("✅ Write or Update ข้อมูลสำเร็จ!")
 
 
-def show_user_db():
+# def show_user_db():
 
-    conn = sqlite3.connect(DATABASE_RECORDING_UPLOAD_NAME)
-    cursor = conn.cursor()
+#     conn = sqlite3.connect(DATABASE_RECORDING_UPLOAD_NAME)
+#     cursor = conn.cursor()
 
-    # ดึงชื่อคอลัมน์ทั้งหมด
-    cursor.execute("PRAGMA table_info(access_log)")
-    all_columns = cursor.fetchall()
-    column_names = [col[1] for col in all_columns]
+#     # ดึงชื่อคอลัมน์ทั้งหมด
+#     cursor.execute("PRAGMA table_info(access_log)")
+#     all_columns = cursor.fetchall()
+#     column_names = [col[1] for col in all_columns]
 
-    # ดึงข้อมูลทั้งหมดในตาราง
-    cursor.execute("SELECT * FROM access_log")
-    rows = cursor.fetchall()
+#     # ดึงข้อมูลทั้งหมดในตาราง
+#     cursor.execute("SELECT * FROM access_log")
+#     rows = cursor.fetchall()
 
-    # แสดงผล
-    print(f"\n📋 ข้อมูลทั้งหมดในตาราง 'access_log' ({len(rows)} rows):")
-    print(tabulate(rows, headers=column_names, tablefmt="fancy_grid", stralign="center"))
+#     # แสดงผล
+#     print(f"\n📋 ข้อมูลทั้งหมดในตาราง 'access_log' ({len(rows)} rows):")
+#     print(tabulate(rows, headers=column_names, tablefmt="fancy_grid", stralign="center"))
 
-    conn.close()
+#     conn.close()
 
 
 def update_user_status_db(user_id, new_status):
