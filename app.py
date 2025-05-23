@@ -87,11 +87,11 @@ if "user_id" not in st.session_state and code:
         else:
             st.error("❌ ไม่พบ userId จาก profile")
 
-# if "user_id" not in st.session_state:
-#     st.session_state["user_id"] = "test_user_001"
-#     st.session_state["status"] = "APPROVED"
-#     st.session_state["display_name"] = "ผู้ทดสอบ"
-#     st.session_state["picture_url"] = "https://i.postimg.cc/CMn85hDn/4f0ed88f83fc452f098ab4e58196afc4.jpg"
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = "test_user_001"
+    st.session_state["status"] = "APPROVED"
+    st.session_state["display_name"] = "ผู้ทดสอบ"
+    st.session_state["picture_url"] = "https://i.postimg.cc/CMn85hDn/4f0ed88f83fc452f098ab4e58196afc4.jpg"
 
 
 # ----------------------------
