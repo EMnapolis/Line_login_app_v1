@@ -1,21 +1,30 @@
-# import streamlit as st
-
-# st.set_page_config(page_title="อัปโหลดไฟล์เสียง", page_icon="🎧")
-
-# st.title("🎧 ระบบอัปโหลด Call Recording")
-# st.write("หน้านี้ใช้สำหรับอัปโหลดไฟล์บันทึกเสียง")
-
-# pages/1_Call_Recording_Upload.py
+# pages/Call_Recording_Upload.py
 import streamlit as st
 import pandas as pd
 import datetime
 import os
 from call_upload_utils import (
-    fetch_json, process_records, load_sent_rec_ids,
+    fetch_json, process_records, load_sent_rec_ids_db,
     download_recording, upload_file_to_asb,
-    create_chat_room, json_helper, save_sent_rec_id, log_failed
+    create_chat_room, json_helper, save_sent_rec_id_db, log_failed
 )
+from utility import *
 
+CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
+
+DB_FILE = os.path.join("data", "sqdata.db")
+def get_connection():
+    return sqlite3.connect(DB_FILE)
+
+# -----------------------
+# DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
+# -----------------------
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = "Udebug123456"
+    st.session_state["displayName"] = "ทดสอบระบบ TEST"
+    st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+    st.session_state["status"] = "APPROVED"
+    st.info("🔧 Loaded mock user session for debugging.")
 
 #def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
@@ -26,13 +35,6 @@ if "user_id" not in st.session_state or st.session_state.get("status") != "APPRO
     st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
     st.stop()
 #---------------
-
-# Header ด้านบนขวา
-st.markdown("""
-    <div style='position: absolute; top: 1rem; right: 2rem; font-size: 20px; font-weight: bold;'>
-        Python Recording Upload
-    </div>
-""", unsafe_allow_html=True)
 
 # Left Pane Menu
 menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำงาน", "คุณสมบัติของโปรแกรม", "วิธีติดตั้ง และการใช้งาน"])
@@ -47,10 +49,10 @@ if menu == "หน้าคำสั่งทำงาน":
     # st.markdown("<small><b>ChatCenter Access Token (chat_token)</b></small>", unsafe_allow_html=True)
     with st.expander("🔐 ขยายเพื่อแก้ไข Chat Token และ Contact ID", expanded=False):
         chat_token = st.text_input("ChatCenter Access Token (chat_token)",
-                                   value="xxxxx",
-                                   type="password")
+                                   value = CHAT_TOKEN_VL,type="password",
+                                   help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล
+    col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล 
     with col1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**"):
@@ -93,7 +95,7 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.warning("ไม่มีข้อมูลจาก 3CX API ในช่วงเวลาที่เลือก")
                 else:
                     total_count = len(df) # จำนวนข้อมูลทั้งหมดที่ได้มา
-                    sent_ids = load_sent_rec_ids() # โหลด recId ที่เคยส่งไปแล้ว
+                    sent_ids = load_sent_rec_ids_db() # โหลด recId ที่เคยส่งไปแล้ว
                     df["Id"] = df["Id"].astype(str) # แปลงให้เป็น string เพื่อเปรียบเทียบ
                     df_new = df[~df["Id"].isin(sent_ids)] # กรองรายการที่ยังไม่เคยส่ง
                     new_count = len(df_new) # จำนวนที่ยังไม่เคยส่ง
@@ -115,7 +117,7 @@ if menu == "หน้าคำสั่งทำงาน":
                 st.error("กรุณาใส่ recId")
             else:
                 # โหลดรายการ rec_id ที่เคยส่งไปแล้ว เพื่อไม่ให้ทำซ้ำ
-                sent_ids = load_sent_rec_ids()
+                sent_ids = load_sent_rec_ids_db()
                 if rec_id in sent_ids:
                     st.info("✅ recId นี้เคยถูกส่งไปแล้ว")
                 else:
