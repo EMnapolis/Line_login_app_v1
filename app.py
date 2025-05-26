@@ -1,10 +1,20 @@
 # app.py
 # =============================
 import streamlit as st
+import os
+import sqlite3
+import pandas as pd
 from urllib.parse import parse_qs, urlparse, unquote, urlencode
 from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
-from access_manager import read_access_log, write_or_update_user, get_approvers, update_user_status
+from access_manager import (
+    read_access_log, write_or_update_user, get_approvers, update_user_status,
+    read_access_log_db, write_or_update_user_db, get_approvers_db, update_user_status_db
+)
+
+DB_FILE = os.path.join("data", "sqdata.db")
+SCHEMA_FILE = os.path.join("data", "schema.sql")
+
 
 st.set_page_config(page_title="Line Login App", page_icon="✅")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
@@ -48,12 +58,12 @@ if "user_id" not in st.session_state and code:
 
         if user_id:
             try:
-                users = read_access_log()
+                users = read_access_log_db()
                 user_info = users.get(user_id)
 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
-                    write_or_update_user(user_id, display_name, picture_url, status="PENDING")
+                    write_or_update_user_db(user_id, display_name, picture_url, status="PENDING")
                     user_status = "PENDING"
                 else:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
@@ -116,17 +126,38 @@ if menu == "🖥 หน้าต่างทำงาน":
 # ----------------------------
 elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้งาน":
     st.header("📄 รายชื่อผู้ใช้งานทั้งหมด")
-
-    users = read_access_log()
+    
+    df = read_access_log_db()
+    df = df.rename(columns={
+        "Display Name": "displayName",
+        "Picture URL": "pictureUrl",
+        "Status": "status",
+        "Last Updated": "updated_at"
+    })
+    users = df.set_index("User ID").to_dict(orient="index")
     current_user_id = st.session_state.get("user_id", "")
     current_user = users.get(current_user_id, {})
     approvers = get_approvers()
+
+    # # -----------------------
+    # # DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
+    # # -----------------------
+    # if "user_id" not in st.session_state:
+    #     st.session_state["user_id"] = "Udebug123456"
+    #     st.session_state["displayName"] = "ทดสอบระบบ TEST"
+    #     st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+    #     st.session_state["status"] = "APPROVED"
+    #     st.info("🔧 Loaded mock user session for debugging.")
 
     # ✅ แสดงข้อมูลของคุณ
     st.subheader("🧑‍💼 ข้อมูลของคุณ")
     profile1, profile2, profile3 = st.columns([1, 4, 2])
     with profile1:
-        st.image(current_user.get("pictureUrl", ""), width=80)
+        url = current_user.get("pictureUrl", "")
+        if url:
+            st.image(url, width=80)
+        else:
+            st.warning("ไม่มีรูปโปรไฟล์")
     with profile2:
         st.markdown(f"""
             **{current_user.get('displayName', 'ไม่ทราบชื่อ')}**  
@@ -147,20 +178,24 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
 
         for uid, info in users.items():
             if info.get("status") == "PENDING" and uid != current_user_id:
-                col1, col2, col3 = st.columns([1, 3, 2])
-                with col1:
-                    st.image(info.get("pictureUrl", ""), width=60)
-                with col2:
+                pend1, pend2, pend3 = st.columns([1, 4, 2])
+                with pend1:
+                    url = info.get("pictureUrl", "")
+                    if url:
+                        st.image(url, width=60)
+                    else:
+                        st.warning("ไม่มีรูปโปรไฟล์")
+                with pend2:
                     st.markdown(f"**{info.get('displayName')}**  \n🆔 `{uid}`  \n📌 สถานะ: 🟡 `PENDING`")
-                with col3:
+                with pend3:
                     if st.button("✅ อนุมัติ", key=f"approve_pending_{uid}"):
-                        update_user_status(uid, "APPROVED")
+                        update_user_status_db(uid, "APPROVED")
                         send_message_to_user(uid, "✅ คุณได้รับอนุญาตให้เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
-                        st.experimental_rerun()
+                        st.rerun()
                     if st.button("🚫 ปฏิเสธ", key=f"deny_pending_{uid}"):
-                        update_user_status(uid, "DENIED")
+                        update_user_status_db(uid, "DENIED")
                         send_message_to_user(uid, "❌ คุณไม่ได้รับสิทธิ์เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
-                        st.experimental_rerun()
+                        st.rerun()
 
     # ✅ แสดงผู้ใช้งานทั้งหมด
     st.markdown("---")
@@ -177,26 +212,43 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
         status = info.get("status", "PENDING")
         emoji = status_emoji.get(status, "⚪")
 
-        col1, col2, col3, col4 = st.columns([1, 7, 2, 2])
-        with col1:
-            st.markdown(emoji)
-        with col2:
-            st.markdown(f"🆔 `{uid}` | **{display_name}**")
-        with col3:
+        allusers1, allusers2, allusers3, = st.columns([1, 7, 2])
+        with allusers1:
+            url = info.get("pictureUrl", "")
+            if url:
+                st.image(url, width=80)
+            else:
+                st.warning("ไม่มีรูปโปรไฟล์")
+        with allusers2:
+            st.markdown(f"""
+                **{display_name}**  
+                🆔 `{uid}`
+            """)
+        with allusers3:
             if status != "APPROVED" and current_user_id in approvers:
                 if st.button("✅ อนุมัติ", key=f"approve_all_{uid}"):
-                    update_user_status(uid, "APPROVED")
-                    st.experimental_rerun()
-        with col4:
+                    update_user_status_db(uid, "APPROVED")
+                    st.rerun()
             if status != "DENIED" and current_user_id in approvers:
                 if st.button("🚫 ปฏิเสธ", key=f"deny_all_{uid}"):
-                    update_user_status(uid, "DENIED")
-                    st.experimental_rerun()
+                    update_user_status_db(uid, "DENIED")
+                    st.rerun()
+            
 
 # ----------------------------
 # เมนู: 📄 ขอดู access_log ไฟล์
 # ----------------------------
 elif menu == "📄 ขอดู access_log ไฟล์":
+    st.title("📄 ข้อมูลผู้ใช้งานจากฐานข้อมูล (access_login)")
+    try:
+        df = read_access_log_db()
+        if df.empty:
+            st.info("🔍 ไม่พบข้อมูลผู้ใช้งานในฐานข้อมูล")
+        else:
+            st.dataframe(df, use_container_width=True)
+    except Exception as e:
+        st.error(f"❌ ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: {e}")
+
     st.title("📄 ขอดู access_log.txt (จากไฟล์)")
     try:
         with open("access_log.txt", "r", encoding="utf-8") as f:
@@ -211,7 +263,7 @@ elif menu == "📄 ขอดู access_log ไฟล์":
 elif menu == "🔐 เข้าสู่ระบบ LINE (ตรวจสอบสิทธิ์)":
     st.title("🔐 ระบบขออนุมัติผ่าน LINE")
 
-    # ใช้ค่าจาก config.py ที่คุณมีอยู่
+    # ใช้ค่าจาก config.py ที่คุณมีอยู่ และ .env
     params = {
         "response_type": "code",
         "client_id": CHANNEL_ID,
