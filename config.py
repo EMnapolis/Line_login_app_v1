@@ -9,3 +9,5 @@ CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI")
 STATE = os.getenv("STATE")
 ACCESS_LOG_FILE = os.getenv("ACCESS_LOG_FILE", "access_log.txt")  # default fallback
+
+openai_api_key = os.getenv("openai_api_key")
