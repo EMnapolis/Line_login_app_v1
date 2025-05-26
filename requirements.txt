@@ -2,7 +2,7 @@
 # =============================
 # รายชื่อไลบรารีที่จำเป็นสำหรับติดตั้ง
 
-streamlit
+streamlit>=1.18.0
 requests
 openai
 langchain

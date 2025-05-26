@@ -17,3 +17,32 @@ CREATE TABLE IF NOT EXISTS sent_records (
 -- -- Table: user_role_assignments
 -- CREATE TABLE IF NOT EXISTS user_role_assignments (
 --     user_id TEXT NO_
+
+-- Table: conversations
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: messages
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER,
+    role TEXT,
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+);
+
+-- Table: prompts
+CREATE TABLE IF NOT EXISTS prompts (
+    name TEXT PRIMARY KEY,
+    content TEXT
+);
+
+-- Table: sent_records (สำรองใช้สำหรับบันทึก ID ที่ส่งออก)
+CREATE TABLE IF NOT EXISTS sent_records (
+    recId TEXT PRIMARY KEY
+);
