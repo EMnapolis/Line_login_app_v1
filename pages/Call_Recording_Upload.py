@@ -16,15 +16,20 @@ DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
 
-# # -----------------------
-# # DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
-# # -----------------------
-# if "user_id" not in st.session_state:
-#     st.session_state["user_id"] = "Udebug123456"
-#     st.session_state["displayName"] = "ทดสอบระบบ TEST"
-#     st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
-#     st.session_state["status"] = "APPROVED"
-#     st.info("🔧 Loaded mock user session for debugging.")
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
+DEBUG = False  # 🔁 เปลี่ยนเป็น False ก่อน deploy จริง
+
+if DEBUG:
+    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "ทดสอบระบบ TEST"
+        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+        st.session_state["status"] = "APPROVED"
+        st.info("🔧 Loaded mock user session for debugging.")
+
 
 #def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
