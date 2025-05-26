@@ -1,7 +1,7 @@
 # pages/Call_Recording_Upload.py
 import streamlit as st
 import pandas as pd
-import datetime
+from datetime import datetime, date, timedelta
 import os
 from call_upload_utils import (
     fetch_json, process_records, load_sent_rec_ids_db,
@@ -16,15 +16,15 @@ DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
 
-# -----------------------
-# DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
-# -----------------------
-if "user_id" not in st.session_state:
-    st.session_state["user_id"] = "Udebug123456"
-    st.session_state["displayName"] = "ทดสอบระบบ TEST"
-    st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
-    st.session_state["status"] = "APPROVED"
-    st.info("🔧 Loaded mock user session for debugging.")
+# # -----------------------
+# # DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
+# # -----------------------
+# if "user_id" not in st.session_state:
+#     st.session_state["user_id"] = "Udebug123456"
+#     st.session_state["displayName"] = "ทดสอบระบบ TEST"
+#     st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+#     st.session_state["status"] = "APPROVED"
+#     st.info("🔧 Loaded mock user session for debugging.")
 
 #def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
@@ -71,8 +71,8 @@ if menu == "หน้าคำสั่งทำงาน":
     if mode == "ดึงข้อมูลจากวันที่":
 
         # ให้ผู้ใช้เลือกวันที่เริ่มต้น และวันที่สิ้นสุด
-        before_date = datetime.date.today() - datetime.timedelta(days=1)
-        default_date = datetime.date.today()
+        before_date = date.today() - timedelta(days=1)
+        default_date = date.today()
         col1, col2 = st.columns(2)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
         with col1:
             from_date = st.date_input("From Date", value=before_date) # วันที่เริ่มต้น

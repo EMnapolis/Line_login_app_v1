@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 load_dotenv()
 open_ai_key = os.getenv("open_ai_key")
 client = OpenAI(api_key=open_ai_key)
+CHAT_TOKEN = os.getenv("CHAT_TOKEN")
 
 # ===== เชื่อมต่อ DB & สร้างตาราง (เรียกใช้จากหน้าอื่นได้เลย) =====
 def init_db():

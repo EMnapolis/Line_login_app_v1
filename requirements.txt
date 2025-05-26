@@ -6,7 +6,7 @@ streamlit
 requests
 openai
 langchain
--U langchain langchain-community
+langchain-community
 tiktoken
 chromadb
 python-dotenv
