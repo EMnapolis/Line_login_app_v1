@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse, unquote, urlencode
 from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import (
-    read_access_log, write_or_update_user, get_approvers, update_user_status,
+    #read_access_log, write_or_update_user, get_approvers, update_user_status,
     read_access_log_db, write_or_update_user_db, get_approvers_db, update_user_status_db
 )
 
