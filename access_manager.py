@@ -85,7 +85,7 @@ def read_access_log():
                 }
     return users
 
-def write_or_update_user(user_id, display_name, picture_url, status="PENDING"): # "APPROVED" "PENDING"
+def write_or_update_user(user_id, display_name, picture_url, status="PENDING"): # "APPROVED" "PENDING" "DENIED"
     users = read_access_log()
     users[user_id] = {
         "displayName": display_name,
