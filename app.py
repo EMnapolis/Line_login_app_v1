@@ -63,11 +63,11 @@ if "user_id" not in st.session_state and code:
 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
-                    write_or_update_user_db(user_id, display_name, picture_url, status="APPROVED")
-                    user_status = "APPROVED"
+                    write_or_update_user_db(user_id, display_name, picture_url, status="PENDING")
+                    user_status = "PENDING"
                 else:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
-                    user_status = user_info.get("status","APPROVED")
+                    user_status = user_info.get("status","PENDING")
                     # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
                     write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
 
@@ -147,7 +147,7 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
     users = df.set_index("User ID").to_dict(orient="index")
     current_user_id = st.session_state.get("user_id", "")
     current_user = users.get(current_user_id, {})
-    approvers = get_approvers()
+    approvers = get_approvers_db()
 
     # # -----------------------
     # # DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
