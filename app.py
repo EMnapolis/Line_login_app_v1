@@ -63,11 +63,11 @@ if "user_id" not in st.session_state and code:
 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
-                    write_or_update_user_db(user_id, display_name, picture_url, status="PENDING")
-                    user_status = "PENDING"
+                    write_or_update_user_db(user_id, display_name, picture_url, status="APPROVED")
+                    user_status = "APPROVED"
                 else:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
-                    user_status = user_info.get("status")
+                    user_status = user_info.get("status","APPROVED")
                     # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
                     write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
 
