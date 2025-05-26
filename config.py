@@ -1,10 +1,13 @@
-# ไฟล์: config.py
-# =============================
-# ใช้เก็บค่าคงที่และการตั้งค่าหลักของระบบ เช่น LINE Channel ID, Secret, Redirect URI
+# config.py
+import os
+from dotenv import load_dotenv
 
-CHANNEL_ID = "1656150106"
-CHANNEL_SECRET = "6f3d52bf5641b5d48bf70a23c8332f86"
-REDIRECT_URI = "https://lineappappv1-fianqtjgevmrlfgve3ynub.streamlit.app"
-STATE = "my-login-session"  # ค่า state สำหรับความปลอดภัยของ OAuth2
+load_dotenv()  # โหลดค่าจาก .env
 
-ACCESS_LOG_FILE = "access_log.txt"
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
+REDIRECT_URI = os.getenv("REDIRECT_URI")
+STATE = os.getenv("STATE")
+ACCESS_LOG_FILE = os.getenv("ACCESS_LOG_FILE", "access_log.txt")  # default fallback
+
+openai_api_key = os.getenv("openai_api_key")
