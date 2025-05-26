@@ -4,4 +4,9 @@
 
 streamlit
 requests
+openai
+langchain
+-U langchain langchain-community
+tiktoken
+chromadb
 python-dotenv
