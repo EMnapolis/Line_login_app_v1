@@ -56,7 +56,7 @@ if menu == "🔐 เข้าสู่ระบบ LINE (ตรวจสอบ�
         profile = get_profile(token_data["access_token"])
 
         # บันทึกผู้ใช้ใหม่ หรืออัปเดต
-        access_manager.write_or_update_user(
+        access_manager.write_or_update_user_db(
             user_id=profile["userId"],
             display_name=profile["displayName"],
             picture_url=profile["pictureUrl"]
@@ -66,7 +66,7 @@ if menu == "🔐 เข้าสู่ระบบ LINE (ตรวจสอบ�
         st.session_state.display_name = profile["displayName"]
 
         # ตรวจสอบสถานะการอนุมัติ
-        users = access_manager.read_access_log()
+        users = access_manager.read_access_log_db()
         if profile["userId"] in users and users[profile["userId"]]["status"] == "APPROVED":
             st.session_state.is_approved = True
             st.success(f"✅ ยินดีต้อนรับ {profile['displayName']} (ได้รับอนุมัติแล้ว)")
@@ -125,7 +125,7 @@ elif menu == "🧩 การปรับแต่ง LINE Developers":
 # ---------------------
 elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้งาน":
     st.subheader("🧾 รายชื่อผู้ใช้งานระบบ")
-    users = access_manager.read_access_log()
+    users = access_manager.read_access_log_db()
     st.table([
         {
             "User ID": uid,

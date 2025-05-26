@@ -6,9 +6,68 @@
 from config import ACCESS_LOG_FILE
 import os
 import json
+import sqlite3
+import pandas as pd
 from datetime import datetime
 
-ACCESS_LOG_FILE = "access_log.txt"  # <<== ย้ายมาที่นี่
+#----------------------
+#การจัดการ  database sqlite ใน Folder data
+#----------------------
+DB_FILE = os.path.join("data", "sqdata.db")
+SCHEMA_FILE = os.path.join("data", "schema.sql")
+def get_connection():
+    return sqlite3.connect(DB_FILE)
+def init_db():
+    with get_connection() as conn:
+        with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
+            conn.executescript(f.read())
+
+def read_access_log_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        return pd.read_sql_query("""
+            SELECT 
+                user_id AS "User ID",
+                display_name AS "Display Name",
+                picture_url AS "Picture URL",
+                status AS "Status",
+                updated_at AS "Last Updated"
+            FROM access_login
+            ORDER BY updated_at DESC;
+        """, conn)
+
+def write_or_update_user_db(user_id, display_name, picture_url, status="PENDING"):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO access_login (user_id, display_name, picture_url, status, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                display_name=excluded.display_name,
+                picture_url=excluded.picture_url,
+                status=excluded.status,
+                updated_at=excluded.updated_at;
+        """, (user_id, display_name, picture_url, status, now))
+
+def get_approvers_db():
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT user_id FROM access_login WHERE status = 'APPROVED'")
+        return {row[0] for row in cursor.fetchall()}
+
+def update_user_status_db(user_id, new_status):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            UPDATE access_login
+            SET status = ?, updated_at = ?
+            WHERE user_id = ?;
+        """, (new_status, now, user_id))
+        return cursor.rowcount > 0
+
+
+#----------------------
+#การจัดการ  ไฟล์ .txt
+#----------------------
+ACCESS_LOG_FILE = "access_log.txt" 
 
 def read_access_log():
     if not os.path.exists(ACCESS_LOG_FILE):
