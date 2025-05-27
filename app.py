@@ -283,90 +283,128 @@ elif menu == "🔐 เข้าสู่ระบบ LINE (ตรวจสอบ
 # -------------------------
 elif menu == "📌 คุณสมบัติของโปรแกรม":
     st.title("📌 คุณสมบัติของโปรแกรม")
+
     st.markdown("""
-    ระบบนี้ออกแบบมาเพื่อให้ผู้ใช้งานสามารถยืนยันตัวตนผ่าน LINE ได้อย่างปลอดภัย และสามารถขยายต่อยอดการทำงานร่วมกับ LIFF หรือ Web App อื่น ๆ ได้ง่าย
-    รองรับทั้งการตรวจสอบสิทธิ์และการส่งข้อความหา LINE User แบบอัตโนมัติ
+    ระบบนี้ออกแบบมาเพื่อให้ผู้ใช้งานสามารถยืนยันตัวตนผ่าน LINE ได้อย่างปลอดภัย และสามารถขยายต่อยอดการทำงานร่วมกับ LIFF หรือ Web App อื่น ๆ ได้ง่าย  
+    รองรับทั้งการตรวจสอบสิทธิ์ผู้ใช้งาน และการส่งข้อความแบบอัตโนมัติผ่าน LINE Messaging API
+
+    ---
 
     ### 🧱 โครงสร้างไฟล์ของระบบ
+
     ```plaintext
-    line_login_app/
-    ├── app.py                  # 🎯 ส่วนติดต่อผู้ใช้งานด้วย Streamlit
-    ├── line_api.py             # 📡 รวมฟังก์ชัน backend สำหรับ LINE API (login, push msg)
-    ├── config.py               # ⚙️ ค่าคงที่ เช่น Channel ID, Secret, Callback URL
+    line_login_app_v1/
+    ├── app.py                  # 🎯 ส่วนหลักของโปรแกรม (Streamlit UI)
+    ├── config.py               # ⚙️ ค่าคงที่ เช่น Channel ID, Secret, Redirect URI
+    ├── line_api.py             # 📡 จัดการ LINE API (login, push, profile)
+    ├── access_manager.py       # 🔐 จัดการสิทธิ์ผู้ใช้และสถานะ (PENDING/APPROVED)
+    ├── call_upload_utils.py    # 🎙️ ฟังก์ชันช่วยในการจัดการไฟล์เสียง
+    ├── utility.py              # 🧰 ฟังก์ชันช่วยทั่วไป เช่น token, session, ส่วนใหญ่ ใช้กับ Chat_with_AI
     ├── requirements.txt        # 📦 รายชื่อไลบรารีที่จำเป็นต้องติดตั้ง
+    ├── .env                    # 🔒 ตัวแปรความลับ (ใช้ local เท่านั้น)
+    ├── .gitignore              # 🚫 กำหนดไฟล์ที่ไม่ต้อง push ขึ้น GitHub
+
+    ├── data/
+    │   ├── schema.sql          # 🧱 โครงสร้างตาราง SQLite เช่น access_login, sent_records
+    │   └── sqdata.db           # 🗃️ ฐานข้อมูล SQLite ที่ใช้เก็บข้อมูลทั้งหมด
+
+    ├── pages/
+    │   ├── Call_Recording_Upload.py  # 🎧 หน้าสำหรับอัปโหลดและส่งไฟล์เสียงเข้า ChatCenter
+    │   └── Chat_with_AI.py           # 🤖 หน้าสำหรับสนทนากับ AI ด้วย OpenAI API
     ```
 
-    ### 🛠 ความสามารถหลัก
-    - ✅ ตรวจสอบตัวตนผ่าน LINE OAuth2 ได้ทันที
-    - ✅ ดึงข้อมูลโปรไฟล์ผู้ใช้งาน เช่น ชื่อ รูป UserID
-    - ✅ รองรับการนำไปฝังใน LIFF หรือ Web App ได้
-    - ✅ ปรับแต่งหน้าต่าง login ได้เองด้วย Streamlit
-    - ✅ พร้อมสำหรับนำไปต่อยอดกับระบบภายในองค์กร
+    ---
+
+    ### 🛠 ความสามารถหลักของระบบ
+
+    - ✅ ตรวจสอบตัวตนผ่าน LINE OAuth2 (login + profile)
+    - ✅ ดึงชื่อผู้ใช้ รูปภาพ และ userId จาก LINE ได้
+    - ✅ จัดการสิทธิ์การเข้าถึงระบบ (PENDING, DENIED, APPROVED)
+    - ✅ ส่งข้อความไปยัง LINE User ด้วย Chat Token หรือ Push API
+    - ✅ ใช้งานกับ LIFF หรือฝังใน Web App ได้ง่าย
+    - ✅ ออกแบบด้วย Streamlit ที่ปรับ UI ได้ตามต้องการ
+    - ✅ เก็บข้อมูลผู้ใช้งานและ log ต่าง ๆ ลง SQLite
+    - ✅ แยกการเขียนโค้ดแต่ละส่วนตามหน้าที่ (maintain ได้ดี)
+    - ✅ พร้อมต่อยอดการใช้งานในองค์กร เช่น CRM, Helpdesk, AI ChatBot
     """)
+
+    st.success("💡 ระบบนี้พร้อมใช้งาน และต่อยอดในระดับ Production ได้ทันที!")
+
 
 # -------------------------
 # เมนู: วิธีใช้งานโปรแกรม
 # -------------------------
 elif menu == "📖 วิธีใช้งานโปรแกรม":
     st.title("📖 วิธีใช้งานโปรแกรม")
+
     st.markdown("""
-    เอกสารฉบับนี้จัดทำขึ้นเพื่อแนะนำทั้ง **ผู้ใช้งานทั่วไป** และ **นักพัฒนา (Dev)**
-    ให้สามารถติดตั้ง ใช้งาน และปรับแต่งระบบ Login ด้วย LINE ได้อย่างถูกต้อง
+    เอกสารฉบับนี้จัดทำขึ้นเพื่อแนะนำทั้ง **ผู้ใช้งานทั่วไป** และ **นักพัฒนา (Dev)**  
+    ให้สามารถติดตั้ง ใช้งาน และปรับแต่งระบบ Login ด้วย LINE ได้อย่างถูกต้อง และปลอดภัย
 
-    ### ⚙️ สำหรับนักพัฒนา (Dev)
-    หากต้องการปรับเปลี่ยนค่าการเชื่อมต่อ LINE (เช่นเปลี่ยน Channel ใหม่ หรือใช้ในโปรเจกต์อื่น):
+    ---
 
-    🔐 ให้ไปแก้ไขไฟล์ `config.py` ตามนี้:
+    ### ⚙️ สำหรับนักพัฒนา (Developer Guide)
 
-    ```python
-    CHANNEL_ID = "YOUR_LINE_CHANNEL_ID"
-    CHANNEL_SECRET = "YOUR_LINE_CHANNEL_SECRET"
-    REDIRECT_URI = "YOUR_CALLBACK_URL"
+    หากคุณต้องการปรับเปลี่ยนการเชื่อมต่อกับ LINE Platform:
+
+    - ให้ไปแก้ไขไฟล์ `.env` ภายในโฟลเดอร์หลักของโปรเจกต์
+    - ยกตัวอย่างค่าที่ใช้:
+
+    ```dotenv
+    CHANNEL_ID="YOUR_LINE_CHANNEL_ID"
+    CHANNEL_SECRET="YOUR_LINE_CHANNEL_SECRET"
+    REDIRECT_URI="YOUR_CALLBACK_URL"
+    OPENAI_API_KEY="YOUR_OPENAI_KEY"
+    CHAT_TOKEN="YOUR_CHAT_TOKEN"
     ```
 
-    - `CHANNEL_ID` และ `CHANNEL_SECRET`: ต้องมาจาก LINE Developers Console ในหัวข้อ **LINE Login**
-    - `REDIRECT_URI`: ต้อง **ตรงเป๊ะ** กับที่ลงทะเบียนไว้ใน Console เช่น `https://liff.line.me/xxxx`
-    - แนะนำให้ใช้ไฟล์ `.env` สำหรับ production เพื่อไม่ให้ข้อมูลหลุด
+    - `CHANNEL_ID`, `CHANNEL_SECRET`: ได้จาก [LINE Developers Console](https://developers.line.biz/)
+    - `REDIRECT_URI`: ต้องตรงกับ URI ที่ลงทะเบียนไว้ใน LINE Console
+    - สำหรับการ deploy บน **Streamlit Cloud** ให้ใส่ค่าพวกนี้ใน **Secrets** แทน `.env`
 
     ---
 
     ### 🧾 ขั้นตอนการติดตั้งระบบ (Installation Guide)
 
     1. **ติดตั้ง Python**
-       ดาวน์โหลดได้ที่ [python.org](https://www.python.org/downloads/)
-       ➤ แนะนำใช้ **Python 3.10 ขึ้นไป**
+        - ดาวน์โหลดได้ที่ [python.org](https://www.python.org/downloads/)
+        - ✅ แนะนำ Python 3.10 ขึ้นไป
 
-    2. **โคลนหรือดาวน์โหลดโปรเจกต์นี้**
-       ```bash
-       git clone https://github.com/your-org/line-login-app.git
-       cd line-login-app
-       ```
+    2. **โคลนหรือดาวน์โหลดโปรเจกต์จาก GitHub**
+        ```bash
+        git clone https://github.com/your-org/line-login-app.git
+        cd line-login-app
+        ```
 
     3. **ติดตั้งไลบรารีที่จำเป็น**
-       ใช้คำสั่ง:
-       ```bash
-       pip install -r requirements.txt
-       ```
+        ```bash
+        pip install -r requirements.txt
+        ```
 
-    4. **เรียกใช้งานโปรแกรมด้วย Streamlit**
-       ```bash
-       streamlit run app.py
-       ```
+    4. **เริ่มต้นระบบด้วย Streamlit**
+        ```bash
+        streamlit run app.py
+        ```
 
     ---
 
     ### 🪜 วิธีใช้งานระบบ (User Guide)
 
-    1. เปิดหน้าเว็บและไปยังเมนู **🖥 หน้าต่างทำงาน**
+    1. ไปที่เมนู **🖥 หน้าต่างทำงาน**
     2. กดปุ่ม **🔗 เข้าสู่ระบบด้วย LINE**
-    3. ระบบจะพาไปที่หน้าล็อกอิน LINE (ผ่าน LIFF)
-    4. เมื่อยืนยันสำเร็จ จะ redirect กลับและแสดงข้อมูลโปรไฟล์
-    5. สามารถใช้ข้อมูล User ID สำหรับระบบอื่น เช่น whitelist หรือส่งข้อความ
+    3. ระบบจะพาไปหน้า LINE Login (OAuth)
+    4. เมื่อล็อกอินสำเร็จ ระบบจะแสดงข้อมูลโปรไฟล์ของคุณ
+    5. หากคุณมีสถานะเป็น `APPROVED` → คุณสามารถ:
+        - เข้าเมนู **🧾 ตรวจสอบรายชื่อผู้ใช้งาน** เพื่ออนุมัติผู้ใช้คนอื่น
+        - ใช้งานเมนูต่าง ๆ เช่น **Call Recording Upload**, **Chat with AI**
+    6. หากสถานะคุณคือ `PENDING` → กรุณารอให้ admin ทำการอนุมัติ
 
     ---
 
-    ✅ หากต้องการนำไปใช้งานร่วมกับระบบองค์กร สามารถฝังภายใน LIFF หรือระบบภายในได้ทันที
+    ✅ ระบบนี้สามารถฝังใน **LIFF**, **Web App**, หรือเชื่อมต่อระบบองค์กรได้ทันที  
+    🚀 พร้อมสำหรับการใช้งานจริงและการขยายระบบในอนาคต
     """)
+
 
 # -------------------------
 # เมนู: การปรับแต่ง LINE Developers
@@ -382,7 +420,7 @@ elif menu == "🧩 การปรับแต่ง LINE Developers":
     - **Channel ID** – ตัวเลขที่ใช้เชื่อมต่อระบบ (ตัวอย่าง: `1660782349`)
     - **Channel secret** – รหัสลับที่ใช้ดึง access token
 
-    > 📝 นำค่านี้มาใส่ในไฟล์ `config.py` หรือ `.env` ตามที่ระบบเรียกใช้งาน
+    > 📝 นำค่านี้มาใส่ในไฟล์ `.env` ตามที่ระบบเรียกใช้งาน
 
     ---
 
