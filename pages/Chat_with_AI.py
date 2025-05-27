@@ -12,10 +12,10 @@ initialize_schema(conn)
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🤖 AI Chat Platform")
 #---------------
-# # ✅ ตรวจ login และสิทธิ์
-# if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
-#     st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
-#     st.stop()
+# ✅ ตรวจ login และสิทธิ์
+if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
+    st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
+    st.stop()
 #---------------
 with st.sidebar:
     st.markdown("### 📑 เมนูหลัก")
