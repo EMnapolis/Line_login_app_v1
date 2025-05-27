@@ -85,16 +85,16 @@ if "user_id" not in st.session_state and code:
 # ----------------------------
 # ⚙️ Debug Mode Configuration
 # ----------------------------
-DEBUG = TRUE  # 🔁 เปลี่ยนเป็น False ก่อน deploy จริง
+# DEBUG = TRUE  # 🔁 เปลี่ยนเป็น False ก่อน deploy จริง
 
-if DEBUG:
+# if DEBUG:
     # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
-    if "user_id" not in st.session_state:
-        st.session_state["user_id"] = "Udebug123456"
-        st.session_state["displayName"] = "ทดสอบระบบ TEST"
-        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
-        st.session_state["status"] = "APPROVED"
-        st.info("🔧 Loaded mock user session for debugging.")
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = "Udebug123456"
+    st.session_state["displayName"] = "ทดสอบระบบ TEST"
+    st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+    st.session_state["status"] = "APPROVED"
+    st.info("🔧 Loaded mock user session for debugging.")
 
 # ----------------------------
 # Sidebar Navigation (Dynamic)
