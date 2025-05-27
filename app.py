@@ -9,7 +9,7 @@ from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import (
     #read_access_log, write_or_update_user, get_approvers, update_user_status,
-    read_access_log_db, write_or_update_user_db, get_approvers_db, update_user_status_db, get_user_info_by_id
+    read_access_log_db, write_or_update_user_db, get_approvers_db, update_user_status_db, get_user_info_by_id_db
 )
 
 DB_FILE = os.path.join("data", "sqdata.db")
@@ -59,7 +59,7 @@ if "user_id" not in st.session_state and code:
         if user_id:
             try:
                 users = read_access_log_db()
-                user_info = get_user_info_by_id(user_id)
+                user_info = get_user_info_by_id_db(user_id)
 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
@@ -67,7 +67,7 @@ if "user_id" not in st.session_state and code:
                     user_status = "PENDING"
                 else:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
-                    user_status = user_info.get("status","PENDING")
+                    user_status = user_info.get("status","APPROVED")
                     # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
                     write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
 
