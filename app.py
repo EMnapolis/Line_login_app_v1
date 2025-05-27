@@ -59,7 +59,16 @@ if "user_id" not in st.session_state and code:
         if user_id:
             try:
                 users = read_access_log_db()
-                user_info = get_user_info_by_id_db(user_id)
+                # ----------------------------
+                # ⚙️ Debug Mode Configuration
+                # ----------------------------
+                DEBUG = os.getenv("DEBUG", "0") == "1"
+
+                if DEBUG 
+                    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+                    user_info = get_user_info_by_id_db(Udebug123456)
+                else: 
+                    user_info = get_user_info_by_id_db(user_id)
                 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
@@ -81,20 +90,6 @@ if "user_id" not in st.session_state and code:
         else:
             st.error("❌ ไม่พบ userId จาก profile")
 
-
-# ----------------------------
-# ⚙️ Debug Mode Configuration
-# ----------------------------
-# DEBUG = TRUE  # 🔁 เปลี่ยนเป็น False ก่อน deploy จริง
-
-# if DEBUG:
-    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
-# if "user_id" not in st.session_state:
-#     st.session_state["user_id"] = "Udebug123456"
-#     st.session_state["displayName"] = "ทดสอบระบบ TEST"
-#     st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
-#     st.session_state["status"] = "APPROVED"
-#     st.info("🔧 Loaded mock user session for debugging.")
 
 # ----------------------------
 # Sidebar Navigation (Dynamic)
@@ -153,16 +148,6 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
     current_user_id = st.session_state.get("user_id", "")
     current_user = users.get(current_user_id, {})
     approvers = get_approvers_db()
-
-    # # -----------------------
-    # # DEBUG: ตั้งค่า session ผู้ใช้ทดสอบ
-    # # -----------------------
-    # if "user_id" not in st.session_state:
-    #     st.session_state["user_id"] = "Udebug123456"
-    #     st.session_state["displayName"] = "ทดสอบระบบ TEST"
-    #     st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
-    #     st.session_state["status"] = "APPROVED"
-    #     st.info("🔧 Loaded mock user session for debugging.")
 
     # ✅ แสดงข้อมูลของคุณ
     st.subheader("🧑‍💼 ข้อมูลของคุณ")
