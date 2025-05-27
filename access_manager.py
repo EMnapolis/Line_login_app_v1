@@ -63,7 +63,7 @@ def update_user_status_db(user_id, new_status):
         """, (new_status, now, user_id))
         return cursor.rowcount > 0
 
-def get_user_info_by_id(user_id):
+def get_user_info_by_id_db(user_id):
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.execute("""
             SELECT display_name, picture_url, status
