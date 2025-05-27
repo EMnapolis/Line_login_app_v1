@@ -108,8 +108,8 @@ base_menu = [
 # เมนูเพิ่มเติมสำหรับผู้ login แล้ว
 private_menu = [
     "🖥 หน้าต่างทำงาน",
-    "🧾 ตรวจสอบรายชื่อผู้ใช้งาน",
-    "📄 ขอดู access_log ไฟล์"
+    "🧾 ตรวจสอบรายชื่อผู้ใช้งาน"
+    #"📄 ขอดู access_log ไฟล์"
 ]
 
 # รวมเมนูตามสิทธิ์
@@ -135,127 +135,129 @@ if menu == "🖥 หน้าต่างทำงาน":
 # เมนู: ตรวจสอบรายชื่อผู้ใช้งาน
 # ----------------------------
 elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้งาน":
-    st.header("📄 รายชื่อผู้ใช้งานทั้งหมด")
-    
-    df = read_access_log_db()
-    df = df.rename(columns={
-        "Display Name": "displayName",
-        "Picture URL": "pictureUrl",
-        "Status": "status",
-        "Last Updated": "updated_at"
-    })
-    users = df.set_index("User ID").to_dict(orient="index")
-    current_user_id = st.session_state.get("user_id", "")
-    current_user = users.get(current_user_id, {})
-    approvers = get_approvers_db()
+    st.subheader("📄 รายชื่อผู้ใช้งาน")
+    tab_verify, tab_view_all = st.tabs(["🧾 ตรวจสอบรายชื่อผู้ใช้งาน", "📄 ขอดู access_login"])
 
-    # ✅ แสดงข้อมูลของคุณ
-    st.subheader("🧑‍💼 ข้อมูลของคุณ")
-    profile1, profile2, profile3 = st.columns([1, 4, 2])
-    with profile1:
-        url = current_user.get("pictureUrl", "")
-        if url:
-            st.image(url, width=80)
-        else:
-            st.warning("ไม่มีรูปโปรไฟล์")
-    with profile2:
-        st.markdown(f"""
-            **{current_user.get('displayName', 'ไม่ทราบชื่อ')}**  
-            🆔 `{current_user_id}`
-        """)
-    with profile3:
-        status = current_user.get("status", "PENDING")
-        status_icon = "🟢" if status == "APPROVED" else "🟡" if status == "PENDING" else "🔴"
-        st.markdown(f"**สถานะ:** {status_icon} `{status}`")
+    with tab_verify:
+        df = read_access_log_db()
+        df = df.rename(columns={
+            "Display Name": "displayName",
+            "Picture URL": "pictureUrl",
+            "Status": "status",
+            "Last Updated": "updated_at"
+        })
+        users = df.set_index("User ID").to_dict(orient="index")
+        current_user_id = st.session_state.get("user_id", "")
+        current_user = users.get(current_user_id, {})
+        approvers = get_approvers_db()
 
-    if current_user_id in approvers:
-        st.success("✅ คุณมีสิทธิ์อนุมัติผู้ใช้งานคนอื่น")
-    
-
-        # ✅ แสดงรายชื่อผู้รอการอนุมัติ
-        st.markdown("---")
-        st.subheader("🧾 ผู้รอการอนุมัติ")
-
-        for uid, info in users.items():
-            if info.get("status") == "PENDING" and uid != current_user_id:
-                pend1, pend2, pend3 = st.columns([1, 4, 2])
-                with pend1:
-                    url = info.get("pictureUrl", "")
-                    if url:
-                        st.image(url, width=60)
-                    else:
-                        st.warning("ไม่มีรูปโปรไฟล์")
-                with pend2:
-                    st.markdown(f"**{info.get('displayName')}**  \n🆔 `{uid}`  \n📌 สถานะ: 🟡 `PENDING`")
-                with pend3:
-                    if st.button("✅ อนุมัติ", key=f"approve_pending_{uid}"):
-                        update_user_status_db(uid, "APPROVED")
-                        send_message_to_user(uid, "✅ คุณได้รับอนุญาตให้เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
-                        st.rerun()
-                    if st.button("🚫 ปฏิเสธ", key=f"deny_pending_{uid}"):
-                        update_user_status_db(uid, "DENIED")
-                        send_message_to_user(uid, "❌ คุณไม่ได้รับสิทธิ์เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
-                        st.rerun()
-
-    # ✅ แสดงผู้ใช้งานทั้งหมด
-    st.markdown("---")
-    st.subheader("📋 รายชื่อผู้ใช้งานทั้งหมด")
-
-    status_emoji = {
-        "APPROVED": "🟢",
-        "PENDING": "🟡",
-        "DENIED": "🔴"
-    }
-
-    for uid, info in users.items():
-        display_name = info.get("displayName", "ไม่ทราบชื่อ")
-        status = info.get("status", "PENDING")
-        emoji = status_emoji.get(status, "⚪")
-
-        allusers1, allusers2, allusers3, = st.columns([1, 7, 2])
-        with allusers1:
-            url = info.get("pictureUrl", "")
+        # ✅ แสดงข้อมูลของคุณ
+        st.subheader("🧑‍💼 ข้อมูลของคุณ")
+        profile1, profile2, profile3 = st.columns([1, 4, 2])
+        with profile1:
+            url = current_user.get("pictureUrl", "")
             if url:
                 st.image(url, width=80)
             else:
                 st.warning("ไม่มีรูปโปรไฟล์")
-        with allusers2:
+        with profile2:
             st.markdown(f"""
-                **{display_name}**  
-                🆔 `{uid}`
+                **{current_user.get('displayName', 'ไม่ทราบชื่อ')}**  
+                🆔 `{current_user_id}`
             """)
-        with allusers3:
-            if status != "APPROVED" and current_user_id in approvers:
-                if st.button("✅ อนุมัติ", key=f"approve_all_{uid}"):
-                    update_user_status_db(uid, "APPROVED")
-                    st.rerun()
-            if status != "DENIED" and current_user_id in approvers:
-                if st.button("🚫 ปฏิเสธ", key=f"deny_all_{uid}"):
-                    update_user_status_db(uid, "DENIED")
-                    st.rerun()
+        with profile3:
+            status = current_user.get("status", "PENDING")
+            status_icon = "🟢" if status == "APPROVED" else "🟡" if status == "PENDING" else "🔴"
+            st.markdown(f"**สถานะ:** {status_icon} `{status}`")
+
+        if current_user_id in approvers:
+            st.success("✅ คุณมีสิทธิ์อนุมัติผู้ใช้งานคนอื่น")
+        
+
+            # ✅ แสดงรายชื่อผู้รอการอนุมัติ
+            st.markdown("---")
+            st.subheader("🧾 ผู้รอการอนุมัติ")
+
+            for uid, info in users.items():
+                if info.get("status") == "PENDING" and uid != current_user_id:
+                    pend1, pend2, pend3 = st.columns([1, 4, 2])
+                    with pend1:
+                        url = info.get("pictureUrl", "")
+                        if url:
+                            st.image(url, width=60)
+                        else:
+                            st.warning("ไม่มีรูปโปรไฟล์")
+                    with pend2:
+                        st.markdown(f"**{info.get('displayName')}**  \n🆔 `{uid}`  \n📌 สถานะ: 🟡 `PENDING`")
+                    with pend3:
+                        if st.button("✅ อนุมัติ", key=f"approve_pending_{uid}"):
+                            update_user_status_db(uid, "APPROVED")
+                            send_message_to_user(uid, "✅ คุณได้รับอนุญาตให้เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
+                            st.rerun()
+                        if st.button("🚫 ปฏิเสธ", key=f"deny_pending_{uid}"):
+                            update_user_status_db(uid, "DENIED")
+                            send_message_to_user(uid, "❌ คุณไม่ได้รับสิทธิ์เข้าใช้งาน", "<REPLACE_WITH_TOKEN>")
+                            st.rerun()
+
+        # ✅ แสดงผู้ใช้งานทั้งหมด
+        st.markdown("---")
+        st.subheader("📋 รายชื่อผู้ใช้งานทั้งหมด")
+
+        status_emoji = {
+            "APPROVED": "🟢",
+            "PENDING": "🟡",
+            "DENIED": "🔴"
+        }
+
+        for uid, info in users.items():
+            display_name = info.get("displayName", "ไม่ทราบชื่อ")
+            status = info.get("status", "PENDING")
+            emoji = status_emoji.get(status, "⚪")
+
+            allusers1, allusers2, allusers3, = st.columns([1, 7, 2])
+            with allusers1:
+                url = info.get("pictureUrl", "")
+                if url:
+                    st.image(url, width=60)
+                else:
+                    st.warning("no image")
+            with allusers2:
+                st.markdown(f"""
+                    **{display_name}**  
+                    🆔 `{uid}`
+                """)
+            with allusers3:
+                if status != "APPROVED" and current_user_id in approvers:
+                    if st.button("✅ อนุมัติ", key=f"approve_all_{uid}"):
+                        update_user_status_db(uid, "APPROVED")
+                        st.rerun()
+                if status != "DENIED" and current_user_id in approvers:
+                    if st.button("🚫 ปฏิเสธ", key=f"deny_all_{uid}"):
+                        update_user_status_db(uid, "DENIED")
+                        st.rerun()
             
+    with tab_view_all:
+    # ----------------------------
+    # เมนู: 📄 ขอดู access_log ไฟล์
+    # ----------------------------
+    # elif menu == "📄 ขอดู access_log ไฟล์":
+        st.subheader("📄 ข้อมูลผู้ใช้งานจากฐานข้อมูล (access_login)")
+        try:
+            df = read_access_log_db()
+            if df.empty:
+                st.info("🔍 ไม่พบข้อมูลผู้ใช้งานในฐานข้อมูล")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: {e}")
 
-# ----------------------------
-# เมนู: 📄 ขอดู access_log ไฟล์
-# ----------------------------
-elif menu == "📄 ขอดู access_log ไฟล์":
-    st.title("📄 ข้อมูลผู้ใช้งานจากฐานข้อมูล (access_login)")
-    try:
-        df = read_access_log_db()
-        if df.empty:
-            st.info("🔍 ไม่พบข้อมูลผู้ใช้งานในฐานข้อมูล")
-        else:
-            st.dataframe(df, use_container_width=True)
-    except Exception as e:
-        st.error(f"❌ ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: {e}")
-
-    st.title("📄 ขอดู access_log.txt (จากไฟล์)")
-    try:
-        with open("access_log.txt", "r", encoding="utf-8") as f:
-            content = f.read()
-        st.text_area("📄 เนื้อหา access_log.txt", value=content, height=300)
-    except Exception as e:
-        st.error(f"❌ ไม่สามารถเปิด access_log.txt ได้: {e}")
+        # st.subheader("📄 ขอดู access_log.txt (จากไฟล์)")
+        # try:
+        #     with open("access_log.txt", "r", encoding="utf-8") as f:
+        #         content = f.read()
+        #     st.text_area("📄 เนื้อหา access_log.txt", value=content, height=300)
+        # except Exception as e:
+        #     st.error(f"❌ ไม่สามารถเปิด access_log.txt ได้: {e}")
 
 # ----------------------------
 # เมนู: 🔐 เข้าสู่ระบบ LINE (ตรวจสอบสิทธิ์)
