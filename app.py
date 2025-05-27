@@ -69,7 +69,7 @@ if "user_id" not in st.session_state and code:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
                     user_status = user_info.get("status")
                     # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
-                    write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
+                    #write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
 
                 st.session_state["user_id"] = user_id
                 st.session_state["display_name"] = display_name
