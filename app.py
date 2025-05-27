@@ -16,7 +16,7 @@ DB_FILE = os.path.join("data", "sqdata.db")
 SCHEMA_FILE = os.path.join("data", "schema.sql")
 
 
-st.set_page_config(page_title="Line Login App", page_icon="✅")
+st.set_page_config(page_title="Line Login App", page_icon="✅", layout="wide")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 st.title("📋 เมนูหลัก")
