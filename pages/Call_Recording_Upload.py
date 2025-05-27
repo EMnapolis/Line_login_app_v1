@@ -32,8 +32,10 @@ if DEBUG:
 
 
 #def render_page():
+st.set_page_config(page_title="ระบบ Call Recording Upload", page_icon="🎙️", layout="wide")
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🎙️ ระบบ Call Recording Upload")
+
 #---------------
 # ✅ ตรวจ login และสิทธิ์
 if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":

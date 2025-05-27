@@ -9,6 +9,7 @@ conn, cursor = init_db()
 initialize_schema(conn)
 
 # ========== ตั้งค่าหน้า Streamlit ==========
+st.set_page_config(page_title="AI Chat Platform", page_icon="🤖", layout="wide")
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🤖 AI Chat Platform")
 #---------------
