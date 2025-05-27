@@ -64,7 +64,7 @@ if "user_id" not in st.session_state and code:
                 # ----------------------------
                 DEBUG = os.getenv("DEBUG", "0") == "1"
 
-                if DEBUG 
+                if DEBUG = "1"
                     # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
                     user_info = get_user_info_by_id_db(Udebug123456)
                 else: 
