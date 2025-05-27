@@ -63,6 +63,17 @@ def update_user_status_db(user_id, new_status):
         """, (new_status, now, user_id))
         return cursor.rowcount > 0
 
+def get_user_info_by_id(user_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.execute("""
+            SELECT display_name, picture_url, status
+            FROM access_login
+            WHERE user_id = ?
+        """, (user_id,))
+        row = cursor.fetchone()
+        if row:
+            return {"displayName": row[0], "pictureUrl": row[1], "status": row[2]}
+        return None
 
 #----------------------
 #การจัดการ  ไฟล์ .txt
