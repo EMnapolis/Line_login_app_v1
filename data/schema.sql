@@ -9,8 +9,9 @@ CREATE TABLE IF NOT EXISTS access_login (
     Role TEXT,
     updated_at TEXT NOT NULL
 );
-
--- Table: sent_records
+--------------------------------------------------------------
+-- Table: sent_records สำหรับ pages/Call_Recording_Upload.py --
+--------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sent_records (
     recId TEXT PRIMARY KEY
 );
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 -- Table: messages
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     conversation_id INTEGER,
     role TEXT,
     content TEXT,
@@ -39,9 +41,4 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS prompts (
     name TEXT PRIMARY KEY,
     content TEXT
-);
-
--- Table: sent_records (สำรองใช้สำหรับบันทึก ID ที่ส่งออก)
-CREATE TABLE IF NOT EXISTS sent_records (
-    recId TEXT PRIMARY KEY
 );
