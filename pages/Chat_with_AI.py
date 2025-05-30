@@ -1,3 +1,4 @@
+#chat_with_ai
 from utility import *   #
 from config import OPENAI_API_KEY
 
@@ -8,12 +9,41 @@ conn, cursor = init_db()
 initialize_schema(conn)
 
 # ========== ตั้งค่าหน้า Streamlit ==========
+CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
+
+DB_FILE = os.path.join("data", "sqdata.db")
+def get_connection():
+    return sqlite3.connect(DB_FILE)
+# ========== Role ==========
+role = st.session_state.get("Role", "").lower()
+
+if role == "admin" or role == "super admin":
+    convs = list_conversations()
+else:
+    convs = list_conversations(user_id)
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+if DEBUG:
+    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "U"
+        st.session_state["displayName"] = "U"
+        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+        st.session_state["status"] = "APPROVED"
+        st.session_state["Role"] = "user"
+        st.info("🔧 Loaded mock user session for debugging.")
+
+
+#def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🤖 AI Chat Platform")
 #---------------
-# # ✅ ตรวจ login และสิทธิ์
+# ✅ ตรวจ login และสิทธิ์
 if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
-    st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
+    st.error("🚫 กรุณาเข้าสู่ระบบก่อนใช้งาน")
     st.stop()
 #---------------
 with st.sidebar:
@@ -24,10 +54,19 @@ with st.sidebar:
         "📜 ประวัติการสนทนา",
         "📘 วิธีการใช้งาน"
     ])
-    # ✅ ปุ่ม Reset ตามแต่ละ tab
-    if st.button("🆕 เริ่มแชทใหม่"):
-        st.session_state.clear()
-        st.rerun()
+    #ปุ่มช่วยรีหน้าแบบต่างๆ
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🔄 รีเฟรชหน้า", key="refresh_page"):
+            st.rerun()
+
+    with col2:
+        if st.button("🆕 เริ่มแชทใหม่", key="reset_chat"):
+            st.session_state["messages_gpt"] = []
+            st.session_state["conversation_id"] = None
+            st.session_state["last_saved_count"] = 0
+            st.rerun()
 #---------------
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
@@ -40,10 +79,8 @@ if tab_choice == "💬 สนทนากับ GPT":
         st.caption("💬 ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
            
         # ✅ สร้าง session ครั้งแรกหากยังไม่มี
-        st.session_state.setdefault("messages_gpt", [
-            {"role": "assistant", "content": "How can I help you?"}
-        ])
-
+        st.session_state.setdefault("messages_gpt", 
+                                    [{"role": "assistant", "content": "How can I help you?"}])              
         # ✅ แสดงบทสนทนาเดิม
         for msg in st.session_state["messages_gpt"]:
             st.chat_message(msg["role"]).write(msg["content"])
@@ -62,36 +99,27 @@ if tab_choice == "💬 สนทนากับ GPT":
                 reply = f"❌ Error: {e}"
             st.chat_message("assistant").write(reply)
             st.session_state["messages_gpt"].append({"role": "assistant", "content": reply})
-
-        # ✅ ปุ่มบันทึกบทสนทนา
-        if st.button("💾 บันทึกบทสนทนา", key="save_gpt_button"):
-            messages = st.session_state["messages_gpt"]
-            if len(messages) <= 1:
-                st.warning("⚠️ ขอโทษ ไม่มีข้อความที่สามารถบันทึกได้")
-            else:
-                title = generate_title_from_conversation(messages)
-                save_conversation(conn, cursor, title, "chat_gpt", messages)
-                st.success(f"✅ บันทึกแล้ว: {title}")
-
+            # ✅ Auto-save conversation
+            save_conversation_if_ready(conn, cursor, "messages_gpt", "chat_gpt")
+            
     # ----- TAB: แชทพร้อมไฟล์ -----
     with tab_file:
-        st.caption("📂 วิเคราะห์ไฟล์ด้วย Prompt หรือถามจากเวกเตอร์")
-        uploaded_file = st.file_uploader("📂 กรุณาอัปโหลดไฟล์", type=["txt", "md", "csv"], key="file_upload")          
+        st.caption("📂 วิเคราะห์ไฟล์ด้วย GPT + Vector Search")
+        uploaded_file = st.file_uploader("📂 กรุณาอัปโหลดไฟล์", type=["txt", "md", "csv"], key="file_upload")
+
+        # ประมวลผลเวกเตอร์
         if uploaded_file and OPENAI_API_KEY and "chain" not in st.session_state:
             process_file_to_chain(uploaded_file)
 
+        # ถามจากเวกเตอร์
         if "chain" in st.session_state:
             st.markdown("---")
             st.info("💬 ถามจากเวกเตอร์ (Vector Search)")
             chat_with_vector_chain()
 
-        if st.session_state.get("chat_history"):
-            if st.button("💾 บันทึกบทสนทนา", key="save_file_button"):
-                messages = st.session_state["chat_history"]
-                title = generate_title_from_conversation(messages)
-                save_conversation(conn, cursor, title, "chat_file", messages)
-                st.success(f"✅ บันทึกแล้ว: {title}")
-                
+            # ✅ Auto-save conversation
+            save_conversation_if_ready(conn, cursor, "messages_vector_chain", "chat_file")
+            
 # ========== Choice 2: เพิ่ม/เลือก Prompt ==========
 elif tab_choice == "🧠 สนทนากับ Prompt":
     st.subheader("🧠 สนทนากับ Prompt")
@@ -124,7 +152,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 if msg["role"] != "system":
                     st.chat_message(msg["role"]).write(msg["content"])
 
-            if prompt := st.chat_input("💬 พิมพ์ข้อความของคุณ"):
+            if prompt := st.chat_input("💬 พิมพ์ข้อความของคุณ", key="prompt_chat_input"):
                 st.chat_message("user").write(prompt)
                 st.session_state["messages_prompt"].append({"role": "user", "content": prompt})
 
@@ -140,14 +168,8 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 st.chat_message("assistant").write(reply)
                 st.session_state["messages_prompt"].append({"role": "assistant", "content": reply})
 
-            if st.button("💾 บันทึกบทสนทนา", key="save_prompt_chat_chat"):
-                messages = st.session_state["messages_prompt"]
-                if len(messages) <= 1:
-                    st.warning("⚠️ ไม่มีข้อความเพียงพอสำหรับบันทึก")
-                else:
-                    title = generate_title_from_conversation(messages)
-                    save_conversation(conn, cursor, title, "chat_gpt", messages)
-                    st.success(f"✅ บันทึกแล้ว: {title}")
+                # ✅ Auto-save conversation
+                save_conversation_if_ready(conn, cursor, "messages_prompt", "prompt_chat")
         else:
             st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✍️ บันทึก / จัดการ Prompt'")
 
@@ -208,15 +230,8 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
             with st.expander("📥 ดาวน์โหลดผลลัพธ์จาก Prompt"):
                 prepare_download_response(source_key="messages_prompt_file_analysis", key_suffix="download_prompt_file")
-
-            if st.button("💾 บันทึกบทสนทนา Prompt", key="save_prompt_file_chat"):
-                messages = st.session_state["messages_prompt_file_analysis"]
-                if len(messages) <= 1:
-                    st.warning("⚠️ ไม่มีข้อความเพียงพอสำหรับบันทึก")
-                else:
-                    title = generate_title_from_conversation(messages)
-                    save_conversation(conn, cursor, title, "chat_file", messages)
-                    st.success(f"✅ บันทึกแล้ว: {title}")
+            # ✅ Auto-save conversation
+            save_conversation_if_ready(conn, cursor, "messages_prompt_file_analysis", "prompt_file")
 
     # ===== TAB 3: ✍️ บันทึก / จัดการ Prompt =====
     with tab_manage:
@@ -229,7 +244,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             if prompt_name and prompt_content:
                 save_prompt(prompt_name, prompt_content)
                 st.success(f"✅ บันทึก Prompt “{prompt_name}” เรียบร้อยแล้ว")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.warning("⚠️ กรุณากรอกชื่อและเนื้อหา Prompt")
 
@@ -248,6 +263,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             st.success(f"✅ แก้ไข Prompt “{name}” เรียบร้อยแล้ว")
                             st.rerun()  # ✅ ใช้ตัวนี้แทน experimental_rerun()
 
+                    with col2:
                         if st.button("🗑️ ลบ Prompt นี้", key=f"delete_prompt_{name}"):
                             delete_prompt(name)
                             st.success(f"✅ ลบแล้ว: {name}")
@@ -258,12 +274,13 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 # ========== Choice 4: History ==========
 elif tab_choice == "📜 ประวัติการสนทนา":
     st.subheader("📜 ประวัติการสนทนา")
-
     if "messages_history" not in st.session_state:
         st.session_state["messages_history"] = []
 
-    convs = list_conversations()
-    label_map = {f"{name} ({created_at})": conv_id for conv_id, name, created_at in convs}
+    convs = list_conversations(user_id)
+    label_map = {
+    f"{name} ({created_at})": conv_id
+    for conv_id, user_id, name, source, created_at in convs}
     selected = st.selectbox("📁 เลือกบทสนทนา", ["- เลือก -"] + list(label_map.keys()))
 
     if selected != "- เลือก -":
@@ -293,16 +310,9 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
             st.chat_message("assistant").write(reply)
             st.session_state["messages_history"].append({"role": "assistant", "content": reply})
-
-        if st.button("💾 อัปเดตบทสนทนานี้", key="update_this_conversation"):
-            cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
-            for msg in st.session_state["messages_history"]:
-                cursor.execute(
-                    "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-                    (conv_id, msg["role"], msg["content"])
-                )
-            conn.commit()
-            st.success("✅ อัปเดตบทสนทนาเดิมเรียบร้อยแล้ว")
+            # ✅ Auto-save conversation
+            save_conversation_if_ready(conn, cursor, "mmessages_history", "chat_history")
+            
         with st.expander("🗑️ ลบบทสนทนานี้"):
             if st.button("ยืนยันการลบ", key="confirm_delete_conv"):
                 cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))

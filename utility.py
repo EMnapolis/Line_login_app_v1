@@ -15,6 +15,13 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from charset_normalizer import from_bytes
 from dotenv import load_dotenv
+import tiktoken
+
+#==== global path ====
+db_path = os.path.join("data", "sqdata.db")
+schema_path = os.path.join("data", "schema.sql")
+user_id = st.session_state.get("user_id")
+#==== global path ====
 
 # ✅ โหลดจาก config.py แทนการใช้ os.getenv() เอง
 from config import OPENAI_API_KEY, CHAT_TOKEN
@@ -24,14 +31,15 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ===== เชื่อมต่อฐานข้อมูล SQLite =====
 def init_db():
-    db_path = os.path.join("data", "sqdata.db")
+    first_time = not os.path.exists(db_path)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
+    if first_time:
+        initialize_schema(conn)
     return conn, cursor
 
 # ===== โหลด schema.sql และรันเพื่อสร้างตาราง =====
 def initialize_schema(conn):
-    schema_path = os.path.join("data", "schema.sql")
     if not os.path.exists(schema_path):
         raise FileNotFoundError(f"❌ ไม่พบไฟล์: {schema_path}")
     with open(schema_path, "r", encoding="utf-8") as f:
@@ -40,12 +48,53 @@ def initialize_schema(conn):
     conn.commit()
 
 # ===== บันทึกบทสนทนาลงฐานข้อมูล =====
-def save_conversation(conn, cursor, name, source, messages):
-    cursor.execute("INSERT INTO conversations (name, source) VALUES (?, ?)", (name, source))
-    conv_id = cursor.lastrowid
+def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt"):
+    messages = st.session_state.get(messages_key, [])
+    conv_key = f"conversation_id_{messages_key}"
+    last_key = f"last_saved_count_{messages_key}"
+
+    conv_id = st.session_state.get(conv_key)
+    last_saved_count = st.session_state.get(last_key, 0)
+
+    if len(messages) >= 2 and len(messages) > last_saved_count:
+        last_two = messages[-2:]
+        if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
+            title = generate_title_from_conversation(messages)
+
+            # ➕ สร้าง conversation ถ้ายังไม่มี
+            if conv_id is None:
+                cursor.execute("""
+                    INSERT INTO conversations (user_id, name, source)
+                    VALUES (?, ?, ?)
+                """, (st.session_state["user_id"], title, source))
+                conv_id = cursor.lastrowid
+                st.session_state[conv_key] = conv_id
+
+            # ➕ เพิ่มข้อความใหม่
+            for msg in messages[last_saved_count:]:
+                cursor.execute("""
+                    INSERT INTO messages (user_id, conversation_id, role, content, total_tokens)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    st.session_state["user_id"],
+                    conv_id,
+                    msg.get("role", "user"),
+                    msg.get("content", ""),
+                    msg.get("total_tokens", "")
+                ))
+
+            conn.commit()
+            st.session_state[last_key] = len(messages)
+            st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}")
+
+# ===== token count ====
+def count_tokens(messages, model="gpt-3.5-turbo"):
+    enc = tiktoken.encoding_for_model(model)
+    total = 0
     for msg in messages:
-        cursor.execute("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", (conv_id, msg["role"], msg["content"]))
-    conn.commit()
+        content = msg.get("content", "")
+        total += len(enc.encode(content))
+    return total
 
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
 def generate_title_from_conversation(messages):
@@ -57,19 +106,27 @@ def generate_title_from_conversation(messages):
         )
         return response.choices[0].message.content.strip()
     except Exception:
-        return "บทสนทนาไม่มีชื่อ"
+        return "บทสนทนาใหม่" if not messages else messages[0].get("content", "บทสนทนาใหม่")[:30]
 
 # ===== ดึงรายชื่อบทสนทนา =====
-def list_conversations():
+def list_conversations(user_id=None):
     db_path = os.path.join("data", "sqdata.db")
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, created_at FROM conversations ORDER BY created_at DESC")
-    return cursor.fetchall()
+
+    query = "SELECT id, user_id, name, source, created_at FROM conversations"
+    params = ()
+
+    if user_id:
+        query += " WHERE user_id = ?"
+        params = (user_id,)
+
+    query += " ORDER BY created_at DESC"
+    df = pd.read_sql_query(query, conn, params=params)
+    conn.close()
+    return df.values.tolist()
 
 # ===== จัดการตาราง Prompt =====
 def init_prompt_table():
-    db_path = os.path.join("data", "sqdata.db")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("""
@@ -79,29 +136,50 @@ def init_prompt_table():
         )
     """)
     conn.commit()
-
 def save_prompt(name, content):
-    db_path = os.path.join("data", "sqdata.db")
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        st.warning("⛔ กรุณาเข้าสู่ระบบ")
+        return
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("REPLACE INTO prompts (name, content) VALUES (?, ?)", (name, content))
+    cursor.execute("""
+        REPLACE INTO prompts (name, user_id, content)
+        VALUES (?, ?, ?)
+    """, (name, user_id, content))
     conn.commit()
-
+    conn.close()
 def list_prompts():
-    db_path = os.path.join("data", "sqdata.db")
+    user_id = st.session_state.get("user_id")
+    role = st.session_state.get("Role", "user")
+
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("SELECT name, content FROM prompts ORDER BY name")
-    return cursor.fetchall()
 
+    if role == "admin":
+        cursor.execute("SELECT name, content FROM prompts ORDER BY name")
+    else:
+        cursor.execute("SELECT name, content FROM prompts WHERE user_id = ? ORDER BY name", (user_id,))
+
+    results = cursor.fetchall()
+    conn.close()
+    return results
 def delete_prompt(name):
-    db_path = os.path.join("data", "sqdata.db")
+    user_id = st.session_state.get("user_id")
+    role = st.session_state.get("Role", "user")
+
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM prompts WHERE name = ?", (name,))
-    conn.commit()
 
-# ===== Upload file =====
+    if role == "admin":
+        cursor.execute("DELETE FROM prompts WHERE name = ?", (name,))
+    else:
+        cursor.execute("DELETE FROM prompts WHERE name = ? AND user_id = ?", (name, user_id))
+
+    conn.commit()
+    conn.close()
+
+# ===== 📂 การอัปโหลดไฟล์และสร้างเวกเตอร์ =====
 def process_file_to_chain(uploaded_file):
     """แปลงไฟล์เป็นเวกเตอร์ และสร้าง Conversational RAG Chain เพื่อถามตอบจากเนื้อหาไฟล์"""
     if not uploaded_file:
@@ -112,33 +190,22 @@ def process_file_to_chain(uploaded_file):
         try:
             file_bytes = uploaded_file.read()
 
-            # 🧠 พยายามตรวจจับ encoding ด้วย charset_normalizer
-            try:
-                from charset_normalizer import from_bytes
-                result = from_bytes(file_bytes).best()
-                if result:
-                    file_content = str(result)
-                else:
-                    raise ValueError("charset_normalizer ไม่สามารถตรวจจับได้")
-            except Exception:
-                try:
-                    file_content = file_bytes.decode("utf-8")
-                except UnicodeDecodeError:
-                    file_content = file_bytes.decode("iso-8859-1")  # fallback เผื่อเป็น encoding ไทยแบบเก่า
+            # 🔍 ตรวจ encoding และ decode ไฟล์
+            file_content = try_decode_file(file_bytes)
 
-            # 📝 แสดง preview ข้อมูลต้นฉบับ
+            # 📝 Preview ตัวอย่างเนื้อหา
             st.text_area("📖 ตัวอย่างเนื้อหาในไฟล์", file_content[:1000], height=200, disabled=True)
 
-            # 📄 แปลงไฟล์เป็น chunks
+            # 🔹 แบ่งข้อความเป็น chunks
             docs = [Document(page_content=file_content)]
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            split_docs = text_splitter.split_documents(docs)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            split_docs = splitter.split_documents(docs)
 
-            # 🧬 ฝังเวกเตอร์
+            # 🧬 แปลงเป็นเวกเตอร์
             embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
             vectorstore = Chroma.from_documents(split_docs, embeddings)
 
-            # 🔁 สร้าง RAG Chain
+            # 🔁 สร้าง RAG Chain สำหรับโต้ตอบ
             chain = ConversationalRetrievalChain.from_llm(
                 llm=ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY),
                 retriever=vectorstore.as_retriever(),
@@ -149,12 +216,33 @@ def process_file_to_chain(uploaded_file):
             st.session_state["chain"] = chain
             st.session_state["chat_history"] = []
             st.session_state["file_content"] = file_content
+
             st.success("✅ ประมวลผลเสร็จแล้ว! พิมพ์คำถามเกี่ยวกับเนื้อหาไฟล์ได้เลย")
 
         except Exception as e:
             st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
-# ===== ให้ผู้ใช้โต้ตอบกับ chain ที่สร้างจากเวกเตอร์ของไฟล์ =====
+# ===== 🔍 ฟังก์ชันตรวจสอบและแปลง encoding ของไฟล์ =====
+def try_decode_file(file_bytes: bytes) -> str:
+    """พยายาม decode ไฟล์โดยใช้ charset_normalizer และ fallback encoding"""
+    try:
+        from charset_normalizer import from_bytes
+        result = from_bytes(file_bytes).best()
+        if result:
+            return str(result)
+    except Exception:
+        pass
+
+    # Fallback แบบแมนนวล
+    try:
+        return file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return file_bytes.decode("iso-8859-1")
+        except Exception as e:
+            raise ValueError(f"❌ ไม่สามารถ decode ไฟล์: {e}")
+
+# ===== 🤖 สนทนากับข้อมูลจากไฟล์ (RAG Chain) =====
 def chat_with_vector_chain():
     if "chain" not in st.session_state:
         st.warning("⚠️ ยังไม่มีเวกเตอร์ไฟล์ใน session — กรุณาอัปโหลดไฟล์ก่อน")
@@ -177,7 +265,7 @@ def chat_with_vector_chain():
         st.chat_message("assistant").write(response)
         st.session_state["chat_history"].append({"role": "assistant", "content": response})
         
-# ===== โหลดไฟล์และแยกเป็น chunk สำหรับการวิเคราะห์ =====
+# ===== 🔎 แปลงไฟล์ที่อัปโหลดเป็นข้อความเพื่อวิเคราะห์ =====
 def get_split_docs(uploaded_file):
     file_name = uploaded_file.name.lower()
 
@@ -199,7 +287,7 @@ def get_split_docs(uploaded_file):
 
     return docs, file_content
 
-# ===== ใช้สำหรับ Tab Prompt: ประมวลผลไฟล์ที่อัปโหลดและแสดงผลใน session =====
+# ===== 🧠 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก =====
 def process_uploaded_file_for_prompt(uploaded_file):
     try:
         uploaded_file.seek(0)
@@ -216,8 +304,6 @@ def process_uploaded_file_for_prompt(uploaded_file):
     except Exception as e:
         st.error(f"❌ ไม่สามารถประมวลผลไฟล์ได้: {e}")
         st.stop()
-        
-# ===== ใช้สำหรับ Tab Prompt: ประมวลผลไฟล์ที่อัปโหลดและแสดงผลใน session =====
 def analyze_all_chunks_with_prompt(prompt, prompt_name):
     """รวมทุก chunk แล้ววิเคราะห์ด้วย Prompt เดียว ส่งเป็นข้อความยาวครั้งเดียว"""
     split_docs = st.session_state.get("split_docs", [])
@@ -255,7 +341,7 @@ def analyze_all_chunks_with_prompt(prompt, prompt_name):
 
     st.success("✅ วิเคราะห์เสร็จสมบูรณ์แล้ว!")
     
-# ===== ใช้สำหรับ Tab Prompt: สร้างไฟล์ดาวน์โหลดจากผลลัพธ์ล่าสุด =====
+# ===== 💾 ปุ่มดาวน์โหลดผลลัพธ์ของ AI =====
 def prepare_download_response(source_key="messages_prompt", key_suffix="default"):
     """
     สร้างปุ่มดาวน์โหลดผลลัพธ์จากข้อความล่าสุดของผู้ช่วย
@@ -289,22 +375,27 @@ def prepare_download_response(source_key="messages_prompt", key_suffix="default"
     else:
         st.info("ℹ️ กรุณาวิเคราะห์หรือเริ่มสนทนาก่อน จึงจะดาวน์โหลดได้")
 
-# ===== สร้างไฟล์ผลลัพธ์ให้ดาวน์โหลดได้ในหลายรูปแบบ =====
+# ===== 📁 แปลงข้อความ AI เป็นไฟล์ดาวน์โหลดได้หลายรูปแบบ =====
 def generate_file_from_prompt(content: str, file_format: str) -> BytesIO:
     buffer = BytesIO()
 
     if file_format == "txt" or file_format == "md":
         buffer.write(content.encode("utf-8"))
     elif file_format == "csv":
-        rows = [line.split(",") for line in content.strip().split("\n")]
-        df = pd.DataFrame(rows)
-        df.to_csv(buffer, index=False)
+        try:
+            rows = [line.split(",") for line in content.strip().split("\n")]
+            df = pd.DataFrame(rows)
+            df.to_csv(buffer, index=False)
+        except Exception as e:
+            raise ValueError("ไม่สามารถแปลงเป็น CSV ได้: " + str(e))
     elif file_format == "xlsx":
-        df = pd.DataFrame([{"เนื้อหาจาก AI": content}])
-        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False, sheet_name="AI Summary")
-    else:
-        raise ValueError("Unsupported file format")
+        try:
+            df = pd.DataFrame([{"เนื้อหาจาก AI": content}])
+            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                df.to_excel(writer, index=False, sheet_name="AI Summary")
+        except Exception as e:
+            raise ValueError("ไม่สามารถสร้าง Excel ได้: " + str(e))
 
     buffer.seek(0)
     return buffer
+
