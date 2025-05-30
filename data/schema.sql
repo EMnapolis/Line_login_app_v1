@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS access_login (
     display_name TEXT NOT NULL,
     picture_url TEXT NULL,
     status TEXT CHECK(status IN ('PENDING','DENIED', 'APPROVED')) NOT NULL DEFAULT 'PENDING',
+    Role TEXT,
     updated_at TEXT NOT NULL
 );
 
@@ -14,13 +15,10 @@ CREATE TABLE IF NOT EXISTS sent_records (
     recId TEXT PRIMARY KEY
 );
 
--- -- Table: user_role_assignments
--- CREATE TABLE IF NOT EXISTS user_role_assignments (
---     user_id TEXT NO_
-
 -- Table: conversations
 CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     source TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -32,6 +30,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id INTEGER,
     role TEXT,
     content TEXT,
+    total_tokens INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(conversation_id) REFERENCES conversations(id)
 );
