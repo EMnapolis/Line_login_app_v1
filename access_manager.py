@@ -28,29 +28,36 @@ def read_access_log_db():
             SELECT 
                 user_id AS "User ID",
                 display_name AS "Display Name",
-                picture_url AS "Picture URL",
                 status AS "Status",
-                updated_at AS "Last Updated"
+                role AS "Role",
+                updated_at AS "Last Updated",
+                picture_url AS "Picture_url"
             FROM access_login
             ORDER BY updated_at DESC;
         """, conn)
 
-def write_or_update_user_db(user_id, display_name, picture_url, status="PENDING"):
+def write_or_update_user_db(user_id, display_name, picture_url, status="PENDING", role="user"):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_connection() as conn:
         conn.execute("""
-            INSERT INTO access_login (user_id, display_name, picture_url, status, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO access_login (user_id, display_name, picture_url, status, role, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 display_name=excluded.display_name,
                 picture_url=excluded.picture_url,
                 status=excluded.status,
+                role=excluded.role,
                 updated_at=excluded.updated_at;
-        """, (user_id, display_name, picture_url, status, now))
+        """, (user_id, display_name, picture_url, status, role, now))
 
 def get_approvers_db():
     with get_connection() as conn:
         cursor = conn.execute("SELECT user_id FROM access_login WHERE status = 'APPROVED'")
+        return {row[0] for row in cursor.fetchall()}
+
+def get_admin_db():
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT user_id FROM access_login WHERE role <> 'user'")
         return {row[0] for row in cursor.fetchall()}
 
 def update_user_status_db(user_id, new_status):
@@ -63,16 +70,26 @@ def update_user_status_db(user_id, new_status):
         """, (new_status, now, user_id))
         return cursor.rowcount > 0
 
+def update_user_role_db(user_id, new_role):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            UPDATE access_login
+            SET role = ?, updated_at = ?
+            WHERE user_id = ?;
+        """, (new_role, now, user_id))
+        return cursor.rowcount > 0
+
 def get_user_info_by_id_db(user_id):
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.execute("""
-            SELECT display_name, picture_url, status
+            SELECT display_name, picture_url, status, role
             FROM access_login
             WHERE user_id = ?
         """, (user_id,))
         row = cursor.fetchone()
         if row:
-            return {"displayName": row[0], "pictureUrl": row[1], "status": row[2]}
+            return {"displayName": row[0], "pictureUrl": row[1], "status": row[2],"role": row[3]}
         return None
 
 # #----------------------

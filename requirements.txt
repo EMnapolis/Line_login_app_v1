@@ -11,4 +11,5 @@ tiktoken
 chromadb>=0.4.24
 python-dotenv
 protobuf==3.20.3
+openpyxl
 #

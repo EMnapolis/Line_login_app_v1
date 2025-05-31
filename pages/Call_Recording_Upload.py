@@ -15,6 +15,9 @@ CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_
 DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
+# ========== Role ==========
+role = st.session_state.get("Role", "").lower()
+# "super admin" , "admin" , "user"
 
 # ----------------------------
 # ⚙️ Debug Mode Configuration
@@ -28,6 +31,7 @@ if DEBUG:
         st.session_state["displayName"] = "ทดสอบระบบ TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
+        st.session_state["Role"] = "super admin"
         st.info("🔧 Loaded mock user session for debugging.")
 
 
@@ -59,7 +63,7 @@ if menu == "หน้าคำสั่งทำงาน":
                                    value = CHAT_TOKEN_VL,type="password",
                                    help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล 
+    col1, col2, col3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
     with col1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**"):
@@ -67,7 +71,10 @@ if menu == "หน้าคำสั่งทำงาน":
                 st.session_state.pop(key, None)
             st.rerun()
     with col2:
-        mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        if role == "admin" or role == "super admin":
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        else:
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่","ดึงข้อมูลจากวันที่"])
     with col3:
         st.markdown("""
     1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  
@@ -145,7 +152,7 @@ if st.session_state.get("ready_to_process") and not st.session_state.get("proces
         processed_df = process_records(df_new, tmp_token, chat_token, contact_id)
         st.session_state["processed"] = True   # บันทึกสถานะว่าได้ประมวลผลแล้ว
         st.session_state["processed_df"] = processed_df
-        st.rerun()  # 🔄 รีเฟรชหน้าใหม่เพื่อซ่อนปุ่ม  คอมเมนท์ไว้ ก่อน
+        # st.rerun()  # 🔄 รีเฟรชหน้าใหม่เพื่อซ่อนปุ่ม  คอมเมนท์ไว้ ก่อน
 
 
 # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
