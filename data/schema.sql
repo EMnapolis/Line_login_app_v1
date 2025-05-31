@@ -1,4 +1,4 @@
--- ===========================================
+-- ============== schema.sql =================
 -- Table: access_login
 -- ใช้เก็บข้อมูลผู้ใช้ที่ขอเข้าระบบ เช่น LINE Login
 -- ตรวจสอบสิทธิ์การเข้าถึง และสถานะอนุมัติ
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS access_login (
     picture_url TEXT NULL,                                  -- URL รูปโปรไฟล์ (ถ้ามี)
     status TEXT CHECK(status IN ('PENDING','DENIED','APPROVED')) NOT NULL DEFAULT 'PENDING', 
                                                             -- สถานะการอนุมัติ: รอดำเนินการ / ปฏิเสธ / อนุมัติ
-    Role TEXT,                                              -- บทบาท เช่น admin, user
+    Role TEXT,                                              -- บทบาท เช่น super admin , admin, user
     updated_at TEXT NOT NULL                                -- เวลาที่ข้อมูลถูกอัปเดตล่าสุด
 );
 

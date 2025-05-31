@@ -29,8 +29,8 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 if DEBUG:
     # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
     if "user_id" not in st.session_state:
-        st.session_state["user_id"] = "U"
-        st.session_state["displayName"] = "U"
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "ทดสอบระบบ TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
         st.session_state["Role"] = "user"

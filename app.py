@@ -8,8 +8,8 @@ from urllib.parse import parse_qs, urlparse, unquote, urlencode
 from config import CHANNEL_ID, CHANNEL_SECRET, REDIRECT_URI, STATE
 from line_api import get_token, get_profile, send_message_to_user
 from access_manager import (
-    #read_access_log, write_or_update_user, get_approvers, update_user_status,
-    read_access_log_db, write_or_update_user_db, get_approvers_db, update_user_status_db, get_user_info_by_id_db
+    read_access_log_db, write_or_update_user_db, get_approvers_db, get_admin_db
+    , update_user_status_db, update_user_role_db, get_user_info_by_id_db
 )
 
 DB_FILE = os.path.join("data", "sqdata.db")
@@ -20,8 +20,21 @@ st.set_page_config(page_title="Line Login App", page_icon="✅", layout="wide")
 st.markdown("<style>footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 st.title("📋 เมนูหลัก")
-#st.page_link("pages/Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
 
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+if DEBUG:
+    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "U TEST"
+        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+        st.session_state["status"] = "APPROVED"
+        st.session_state["Role"] = "super admin"
+        st.info("🔧 Loaded mock user session for debugging.")
 # ----------------------------
 # ✅ อ่าน code จาก query string โดยใช้ st.query_params อย่างเดียว
 # ----------------------------
@@ -59,32 +72,25 @@ if "user_id" not in st.session_state and code:
         if user_id:
             try:
                 users = read_access_log_db()
-                # ----------------------------
-                # ⚙️ Debug Mode Configuration
-                # ----------------------------
-                DEBUG = os.getenv("DEBUG", "0") == "1"
-
-                if DEBUG:
-                    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
-                    user_info = get_user_info_by_id_db(Udebug123456)
-                else: 
-                    user_info = get_user_info_by_id_db(user_id)
+                user_info = get_user_info_by_id_db(user_id)
                 
                 if user_info is None:
                     # 🔰 ผู้ใช้ใหม่ → เพิ่มด้วย status = PENDING
-                    write_or_update_user_db(user_id, display_name, picture_url, status="PENDING")
+                    write_or_update_user_db(user_id, display_name, picture_url, status="PENDING",role="user")
                     user_status = "PENDING"
                 else:
                     # 🟢 ผู้ใช้เดิม → ดึง status เดิม
                     user_status = user_info.get("status")
+                    user_role = user_info.get("role")
                     # ✅ อัปเดตชื่อ/รูป (ถ้าเปลี่ยน) โดยไม่แตะ status
-                    #write_or_update_user_db(user_id, display_name, picture_url, status=user_status)
+                    write_or_update_user_db(user_id, display_name, picture_url, status=user_status,role=user_role)
 
                 st.session_state["user_id"] = user_id
                 st.session_state["display_name"] = display_name
                 st.session_state["status"] = user_status
+                st.session_state["role"] = user_role
 
-                st.success(f"🎉 ยินดีต้อนรับ {display_name} ({user_status})")
+                st.success(f"🎉 ยินดีต้อนรับ {display_name} ({user_role}) | ({user_status})")
             except Exception as e:
                 st.error(f"❌ ไม่สามารถบันทึกผู้ใช้: {e}")
         else:
@@ -144,38 +150,42 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
             "Display Name": "displayName",
             "Picture URL": "pictureUrl",
             "Status": "status",
+            "Role": "role",
             "Last Updated": "updated_at"
         })
         users = df.set_index("User ID").to_dict(orient="index")
         current_user_id = st.session_state.get("user_id", "")
         current_user = users.get(current_user_id, {})
-        approvers = get_approvers_db()
+        status = current_user.get("status", "PENDING")
+        role = current_user.get("role", "user")
+        picture_Url = current_user.get("pictureUrl", "")
+
+        can_change_status = role in {"admin", "super admin"}
+        can_change_role = role == "super admin"
 
         # ✅ แสดงข้อมูลของคุณ
         st.subheader("🧑‍💼 ข้อมูลของคุณ")
         profile1, profile2, profile3 = st.columns([1, 4, 2])
         with profile1:
-            url = current_user.get("pictureUrl", "")
-            if url:
-                st.image(url, width=80)
+            if picture_Url:
+                st.image(picture_Url, width=80)
             else:
                 st.warning("ไม่มีรูปโปรไฟล์")
         with profile2:
             st.markdown(f"""
                 **{current_user.get('displayName', 'ไม่ทราบชื่อ')}**  
-                🆔 `{current_user_id}`
+                🆔 `{current_user_id}`   
+                **Role:** `{role}`
             """)
         with profile3:
-            status = current_user.get("status", "PENDING")
             status_icon = "🟢" if status == "APPROVED" else "🟡" if status == "PENDING" else "🔴"
             st.markdown(f"**สถานะ:** {status_icon} `{status}`")
 
-        if current_user_id in approvers:
+        if can_change_status:
             st.success("✅ คุณมีสิทธิ์อนุมัติผู้ใช้งานคนอื่น")
-        
 
-            # ✅ แสดงรายชื่อผู้รอการอนุมัติ
-            st.markdown("---")
+            # ✅ แสดงผู้รอการอนุมัติ
+            st.markdown("---") 
             st.subheader("🧾 ผู้รอการอนุมัติ")
 
             for uid, info in users.items():
@@ -211,30 +221,64 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
 
         for uid, info in users.items():
             display_name = info.get("displayName", "ไม่ทราบชื่อ")
-            status = info.get("status", "PENDING")
-            emoji = status_emoji.get(status, "⚪")
+            user_status = info.get("status", "PENDING")
+            user_role = info.get("role", "user")
+            emoji = status_emoji.get(user_status, "⚪")
 
-            allusers1, allusers2, allusers3, = st.columns([1, 7, 2])
-            with allusers1:
+            col1, col2, col3, col4 = st.columns([1, 5, 1, 4])
+
+            with col1:
                 url = info.get("pictureUrl", "")
                 if url:
                     st.image(url, width=60)
                 else:
                     st.warning("no image")
-            with allusers2:
+
+            with col2:
                 st.markdown(f"""
-                    **{display_name}**  
-                    🆔 `{uid}`
+                    **{display_name}**
+                    🆔 `{uid}`  
+                    📌 สถานะ: {emoji} `{user_status}`  
+                    🧑‍💼 Role: `{user_role}`
                 """)
-            with allusers3:
-                if status != "APPROVED" and current_user_id in approvers:
-                    if st.button("✅ อนุมัติ", key=f"approve_all_{uid}"):
-                        update_user_status_db(uid, "APPROVED")
-                        st.rerun()
-                if status != "DENIED" and current_user_id in approvers:
-                    if st.button("🚫 ปฏิเสธ", key=f"deny_all_{uid}"):
-                        update_user_status_db(uid, "DENIED")
-                        st.rerun()
+
+            with col3:
+                if can_change_status and uid != current_user_id:
+                    st.markdown("""
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                        <span style="font-size: 14px; margin-bottom: 8px;">เปลี่ยน Status</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if user_status != "APPROVED":
+                        if st.button("✅", key=f"approve_all_{uid}", help="อนุมัติผู้ใช้งาน"):
+                            update_user_status_db(uid, "APPROVED")
+                            st.rerun()
+                    if user_status != "DENIED":
+                        if st.button("🚫", key=f"deny_all_{uid}", help="ปฏิเสธการเข้าใช้งาน"):
+                            update_user_status_db(uid, "DENIED")
+                            st.rerun()
+
+            with col4:
+                if can_change_role and uid != current_user_id:
+                    setrole1, setrole2 = st.columns([2, 1])
+                    with setrole1:
+                        new_role = st.selectbox(
+                            label="เลือก Role",
+                            options=["user", "admin", "super admin"],
+                            index=["user", "admin", "super admin"].index(user_role),
+                            key=f"role_select_{uid}"
+                        )
+                    with setrole2:
+                        st.markdown("""
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                                <span style="font-size: 14px; margin-bottom: 8px;">เปลี่ยน Role</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        if st.button("💼 อัปเดต", key=f"update_role_{uid}", help="อัปเดตสิทธิ์บทบาทของผู้ใช้งาน"):
+                            update_user_role_db(uid, new_role)
+                            st.success(f"✅ เปลี่ยน role ของ `{uid}` เป็น `{new_role}` แล้ว")
+                            st.rerun()
+
             
     with tab_view_all:
     # ----------------------------
@@ -251,13 +295,6 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
         except Exception as e:
             st.error(f"❌ ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: {e}")
 
-        # st.subheader("📄 ขอดู access_log.txt (จากไฟล์)")
-        # try:
-        #     with open("access_log.txt", "r", encoding="utf-8") as f:
-        #         content = f.read()
-        #     st.text_area("📄 เนื้อหา access_log.txt", value=content, height=300)
-        # except Exception as e:
-        #     st.error(f"❌ ไม่สามารถเปิด access_log.txt ได้: {e}")
 
 # ----------------------------
 # เมนู: 🔐 เข้าสู่ระบบ LINE (ตรวจสอบสิทธิ์)

@@ -15,6 +15,9 @@ CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_
 DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
+# ========== Role ==========
+role = st.session_state.get("Role", "").lower()
+# "super admin" , "admin" , "user"
 
 # ----------------------------
 # ⚙️ Debug Mode Configuration
@@ -28,6 +31,7 @@ if DEBUG:
         st.session_state["displayName"] = "ทดสอบระบบ TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
+        st.session_state["Role"] = "super admin"
         st.info("🔧 Loaded mock user session for debugging.")
 
 
@@ -59,7 +63,7 @@ if menu == "หน้าคำสั่งทำงาน":
                                    value = CHAT_TOKEN_VL,type="password",
                                    help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล 
+    col1, col2, col3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
     with col1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**"):
@@ -67,7 +71,10 @@ if menu == "หน้าคำสั่งทำงาน":
                 st.session_state.pop(key, None)
             st.rerun()
     with col2:
-        mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        if role == "admin" or role == "super admin":
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        else:
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่","ดึงข้อมูลจากวันที่"])
     with col3:
         st.markdown("""
     1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  

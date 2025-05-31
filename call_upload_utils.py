@@ -32,7 +32,7 @@ def fetch_json(tmp_token, from_date, to_date):
     # สร้าง URL เพื่อดึง JSON จาก API 3CX
     url = (
         "https://villamarket.3cx.co/xapi/v1/Recordings?"
-        f"%24top=1000&%24skip=0&%24filter=(CallType eq 'InboundExternal' or CallType eq 'OutboundExternal') "
+        f"%24top=3000&%24skip=0&%24filter=(CallType eq 'InboundExternal' or CallType eq 'OutboundExternal') "
         f"and (StartTime ge {start_time} and StartTime lt {end_time})"
         f"&%24count=true&%24orderby=StartTime asc"
     )
