@@ -33,7 +33,7 @@ if DEBUG:
         st.session_state["displayName"] = "U TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
-        st.session_state["Role"] = "super admin"
+        st.session_state["role"] = "super admin"
         st.info("🔧 Loaded mock user session for debugging.")
 # ----------------------------
 # ✅ อ่าน code จาก query string โดยใช้ st.query_params อย่างเดียว
