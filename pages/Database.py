@@ -6,6 +6,20 @@ import os
 import tiktoken
 
 DB_PATH = "data/sqdata.db"
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+if DEBUG:
+    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "U TEST"
+        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+        st.session_state["status"] = "APPROVED"
+        st.session_state["role"] = "super admin"
+        st.info("🔧 Loaded mock user session for debugging.")
 
 # 🔒 ตรวจสอบสิทธิ์เฉพาะ super admin เท่านั้น
 if "role" not in st.session_state or st.session_state["role"] != "super admin":
