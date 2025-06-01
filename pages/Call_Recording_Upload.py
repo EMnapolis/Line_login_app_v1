@@ -15,9 +15,6 @@ CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_
 DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
-# ========== Role ==========
-role = st.session_state.get("Role", "").lower()
-# "super admin" , "admin" , "user"
 
 # ----------------------------
 # ⚙️ Debug Mode Configuration
@@ -31,9 +28,12 @@ if DEBUG:
         st.session_state["displayName"] = "ทดสอบระบบ TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
-        st.session_state["Role"] = "super admin"
+        st.session_state["role"] = "super admin"
         st.info("🔧 Loaded mock user session for debugging.")
 
+# ========== Role ==========
+role = st.session_state.get("role", "").lower()
+# "super admin" , "admin" , "user"
 
 #def render_page():
 st.set_page_config(page_title="ระบบ Call Recording Upload", page_icon="🎙️", layout="wide")
@@ -118,9 +118,20 @@ if menu == "หน้าคำสั่งทำงาน":
                     # เก็บข้อมูลไว้ใน session สำหรับนำไปประมวลผล
                     st.session_state["df_new"] = df_new
                     st.session_state["ready_to_process"] = new_count > 0
-
-                    # แสดงผลลัพธ์ว่าเจอทั้งหมดกี่รายการ และมีกี่รายการที่ยังไม่เคยส่ง
-                    st.info(f"🔢 ทั้งหมด: {total_count} รายการ | ✅ เคยส่งแล้ว: {old_count} | 🆕 รอประมวลผล: {new_count}")
+                    
+                    result1, result2 = st.columns([2,1])
+                    with result1:
+                        # แสดงผลลัพธ์ว่าเจอทั้งหมดกี่รายการ และมีกี่รายการที่ยังไม่เคยส่ง
+                        st.info(f"🔢 ทั้งหมด: {total_count} รายการ | ✅ เคยส่งแล้ว: {old_count} | 🆕 รอประมวลผล: {new_count}")
+                    with result2:
+                        # ทำปุ่ม ดาวน์โหลด ข้อมูลทั้งหมด
+                        if role == "super admin":
+                            st.download_button(
+                                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
+                                data=st.session_state["df_new"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
+                                file_name="JSON_data.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
+                                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
+                            )
 
     elif mode == "ประมวลผลจาก recId โดยตรง":
         rec_id = st.text_input("กรุณาใส่ recId")
