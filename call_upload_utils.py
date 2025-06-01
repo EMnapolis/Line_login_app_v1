@@ -6,7 +6,8 @@ import json
 import html
 import sqlite3
 from datetime import datetime, timedelta
-
+from dotenv import load_dotenv
+load_dotenv()  # โหลดค่าจาก .env
 
 # สร้างโฟลเดอร์สำหรับเก็บ log และไฟล์ชั่วคราว
 LOG_DIR = "logs"
@@ -19,6 +20,40 @@ def get_connection():
     return sqlite3.connect(DB_FILE)
 #SENT_FILE = os.path.join(LOG_DIR, "sent_records.csv")  # ไฟล์เก็บ recId ที่ส่งสำเร็จแล้ว
 FAILED_FILE = os.path.join(LOG_DIR, "failed_records.csv")  # ไฟล์เก็บรายการที่ล้มเหลว
+
+def vl3cx_login():
+    url = "https://villamarket.3cx.co/webclient/api/Login/GetAccessToken"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "Username": os.getenv("vl3cx_user"),
+        "Password": os.getenv("vl3cx_pass"),
+        "SecurityCode": "",
+        "ReCaptchaResponse": None
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    data = response.json()
+
+    if data.get("Status") == "AuthSuccess":
+        token_info = data.get("Token", {})
+        return token_info.get("access_token"), token_info.get("refresh_token")
+    else:
+        return None, None
+
+def vl3cx_refresh_token(refresh_token: str):
+    url = "https://villamarket.3cx.co/connect/token"
+    headers = {
+        "Content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Cookie": f"RefreshTokenCookie={refresh_token}"
+    }
+    data = {
+        "client_id": "Webclient",
+        "grant_type": "refresh_token"
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+    result = response.json()
+    return result.get("access_token")
 
 def fetch_json(tmp_token, from_date, to_date):
     # แปลงวันที่จากไทยเป็น UTC (ลบ 7 ชั่วโมง)
