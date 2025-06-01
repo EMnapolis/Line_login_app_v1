@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import os
 from call_upload_utils import (
+    vl3cx_login, vl3cx_refresh_token,
     fetch_json, process_records, load_sent_rec_ids_db,
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id_db, log_failed
@@ -35,7 +36,13 @@ if DEBUG:
 role = st.session_state.get("role", "").lower()
 # "super admin" , "admin" , "user"
 
-#def render_page():
+# ตั้งค่าเริ่มต้น session_state ให้ปลอดภัย
+# ป้องกัน KeyError หรือ AttributeError โดยตั้งค่าก่อน
+for key in ["access_token", "refresh_token", "tmp_token"]:
+    if key not in st.session_state:
+        st.session_state[key] = ""
+
+#เริ่มต้นการทำงานของหน้า pages/Call_Recording_Upload.py
 st.set_page_config(page_title="ระบบ Call Recording Upload", page_icon="🎙️", layout="wide")
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🎙️ ระบบ Call Recording Upload")
@@ -51,13 +58,40 @@ if "user_id" not in st.session_state or st.session_state.get("status") != "APPRO
 menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำงาน", "คุณสมบัติของโปรแกรม", "วิธีการใช้งาน"])
 
 if menu == "หน้าคำสั่งทำงาน":
-    #st.title("VillaMarket Call Recording Processor")
+    with st.expander("🔐 ขยายเพื่อแก้ไข Tmp Token ระบบ Villa 3CX", expanded=False):
+        vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([1,2,1,2])
+        with vl3cx1:
+            if st.button("Villa3CXLogin"):
+                access_token, refresh_token = vl3cx_login()
+                if access_token and refresh_token:
+                    st.session_state.access_token = access_token
+                    st.session_state.refresh_token = refresh_token
+                    st.session_state.login_status = "✅ Login success!"
+                else:
+                    st.session_state.login_status = "❌ Login failed."
+        with vl3cx2:
+            if "login_status" in st.session_state:
+                st.markdown(st.session_state.login_status)
 
-    tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
-                              value="", type="password",
-                              help="กรอก tmp_token จาก 3CX Dashboard (ดูวิธีใน 'วิธีการใช้งาน')")
+        with vl3cx3:
+            if st.button("Refresh Token"):
+                if st.session_state.refresh_token:
+                    new_token = vl3cx_refresh_token(st.session_state.refresh_token)
+                    if new_token:
+                        st.session_state.tmp_token = new_token
+                        st.session_state.refresh_status = "✅ Token refreshed!"
+                    else:
+                        st.session_state.refresh_status = "❌ Refresh failed."
+                else:
+                    st.session_state.refresh_status = "⚠️ Login first."
+        with vl3cx4:
+            if "refresh_status" in st.session_state:
+                st.markdown(st.session_state.refresh_status)
 
-    # st.markdown("<small><b>ChatCenter Access Token (chat_token)</b></small>", unsafe_allow_html=True)
+        tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
+                                value=st.session_state.tmp_token, type="password",
+                                help="กรอก tmp_token จาก 3CX Dashboard (ดูวิธีใน 'วิธีการใช้งาน')")
+
     with st.expander("🔐 ขยายเพื่อแก้ไข Chat Token และ Contact ID", expanded=False):
         chat_token = st.text_input("ChatCenter Access Token (chat_token)",
                                    value = CHAT_TOKEN_VL,type="password",
