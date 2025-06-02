@@ -397,5 +397,9 @@ def generate_file_from_prompt(content: str, file_format: str) -> BytesIO:
             raise ValueError("ไม่สามารถสร้าง Excel ได้: " + str(e))
 
     buffer.seek(0)
+<<<<<<< Updated upstream
     return buffer
 
+=======
+    return buffer
+>>>>>>> Stashed changes

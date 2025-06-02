@@ -7,13 +7,14 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # เชื่อมต่อ SQLite
 conn, cursor = init_db()
 initialize_schema(conn)
-
+ 
 # ========== ตั้งค่าหน้า Streamlit ==========
 CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
 
 DB_FILE = os.path.join("data", "sqdata.db")
 def get_connection():
     return sqlite3.connect(DB_FILE)
+<<<<<<< Updated upstream
 # ========== Role ==========
 role = st.session_state.get("Role", "").lower()
 
@@ -24,13 +25,30 @@ else:
 # ----------------------------
 # ⚙️ Debug Mode Configuration
 # ----------------------------
+=======
+role = st.session_state.get("Role", "").lower()
+
+if st.session_state.get("Role", "").lower() in ["admin", "super admin"]:
+    convs = list_conversations()
+else:
+    convs = list_conversations(user_id)
+
+# # ----------------------------
+# # ⚙️ Debug Mode Configuration
+# # ----------------------------
+>>>>>>> Stashed changes
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
 if DEBUG:
     # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
     if "user_id" not in st.session_state:
+<<<<<<< Updated upstream
         st.session_state["user_id"] = "U"
         st.session_state["displayName"] = "U"
+=======
+        st.session_state["user_id"] = "q"
+        st.session_state["displayName"] = "q"
+>>>>>>> Stashed changes
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
         st.session_state["Role"] = "user"
