@@ -1,36 +1,61 @@
-#chat_with_ai
-from utility import *   #
+#page/chat_with_ai.py
+from utility import *   #ทุกอย่างจากไฟล์ utility.py
 from config import OPENAI_API_KEY
+from dotenv import load_dotenv
+load_dotenv()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-
 # เชื่อมต่อ SQLite
 conn, cursor = init_db()
 initialize_schema(conn)
- 
+
+# ============================
+# 🌐 GLOBAL PATHS & CONSTANTS
+# ============================
+
+# ชื่อตารางในฐานข้อมูล
+TABLE_NAME_CHAT = "chat_gpt"
+TABLE_NAME_PROMPT = "prompt_store"
+
+# คีย์ใน session_state
+KEY_MESSAGES = "messages_gpt"
+KEY_ANALYSIS_RESULT = "analysis_result"
+KEY_SHOW_DOWNLOAD = "show_download"
+KEY_CHAT_HISTORY = "chat_all_in_one"
+KEY_SELECTED_PROMPT = "prompt_selector"
+
+# MIME types
+MIME_TYPES = {
+    "txt": "text/plain",
+    "md": "text/markdown",
+}
+file_content = ""
+# ชื่อไฟล์เริ่มต้น
+DEFAULT_FILENAME = "analysis_result"
+
+# System prompt เริ่มต้น
+DEFAULT_SYSTEM_PROMPT = "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"
+
 # ========== ตั้งค่าหน้า Streamlit ==========
 CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
 
-DB_FILE = os.path.join("data", "sqdata.db")
-def get_connection():
-    return sqlite3.connect(DB_FILE)
-role = st.session_state.get("Role", "").lower()
+# DB_FILE = os.path.join("data", "sqdata.db")
+# def get_connection():
+#     return sqlite3.connect(DB_FILE)
+# ========== Role ==========
+role = st.session_state.get("Role", "")
 
-if st.session_state.get("Role", "").lower() in ["admin", "super admin"]:
-    convs = list_conversations()
-else:
-    convs = list_conversations(user_id)
 
-# # ----------------------------
-# # ⚙️ Debug Mode Configuration
-# # ----------------------------
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
 if DEBUG:
     # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
     if "user_id" not in st.session_state:
-        st.session_state["user_id"] = "q"
-        st.session_state["displayName"] = "q"
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "U TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
         st.session_state["Role"] = "user"
@@ -70,168 +95,168 @@ with st.sidebar:
 #---------------
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
-    st.subheader("💬 สนทนากับ GPT")
-    st.caption("🚀 A Streamlit chatbot powered by OpenAI GPT-3.5/4")
+    st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
+    st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
 
-    tab_chat, tab_file = st.tabs(["💬 แชททั่วไป", "📁 แชทพร้อมไฟล์"])
+    uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
 
-    with tab_chat:
-        st.caption("💬 ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
-           
-        # ✅ สร้าง session ครั้งแรกหากยังไม่มี
-        st.session_state.setdefault("messages_gpt", 
-                                    [{"role": "assistant", "content": "How can I help you?"}])              
-        # ✅ แสดงบทสนทนาเดิม
-        for msg in st.session_state["messages_gpt"]:
-            st.chat_message(msg["role"]).write(msg["content"])
+    if uploaded_file:
+        try:
+            file_bytes = uploaded_file.read()
+            file_content = read_uploaded_file(uploaded_file.name, file_bytes)
+            st.session_state["file_text"] = file_content
+            st.text_area("📄 ตัวอย่างเนื้อหาไฟล์", file_content[:1000], height=200, disabled=True)
+        except Exception as e:
+            st.error(f"❌ ไม่สามารถอ่านไฟล์ได้: {e}")
+            st.stop()
 
-        # ✅ รอรับข้อความใหม่จากผู้ใช้
-        if prompt := st.chat_input("พิมพ์ข้อความของคุณ...", key="chat_gpt_input"):
-            st.chat_message("user").write(prompt)
-            st.session_state["messages_gpt"].append({"role": "user", "content": prompt})
+    file_content = st.session_state.get("file_text", "")
+    st.session_state.setdefault("chat_all_in_one", [])
+
+    # แสดงประวัติการสนทนา
+    for msg in st.session_state["chat_all_in_one"]:
+        st.chat_message(msg["role"]).write(msg["content"])
+
+    if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
+        st.chat_message("user").write(prompt)
+        st.session_state["chat_all_in_one"].append({"role": "user", "content": prompt})
+
+        if prompt.strip() == "ขอไฟล์" and st.session_state.get("analysis_result"):
+            st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์")
+            st.session_state["show_download"] = True
+        else:
             try:
+                base_messages = [{"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"}]
+                if file_content:
+                    base_messages.append({"role": "user", "content": f"เนื้อหาในไฟล์:\n{file_content[:3000]}"})
+                base_messages.append({"role": "user", "content": prompt})
+
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
-                    messages=st.session_state["messages_gpt"]
+                    messages=base_messages
                 )
+
                 reply = response.choices[0].message.content
+                usage = response.usage
+
+                st.chat_message("assistant").write(reply)
+                st.session_state["chat_all_in_one"].append({"role": "assistant", "content": reply})
+                st.session_state["analysis_result"] = reply
+                st.session_state["show_download"] = False
+
+                st.session_state["messages_gpt"] = base_messages + [{
+                    "role": "assistant",
+                    "content": reply,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens
+                }]
+
+                save_conversation_if_ready(
+                    conn, cursor, "messages_gpt", source="chat_gpt",
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                    total_tokens=usage.total_tokens
+                )
+
             except Exception as e:
-                reply = f"❌ Error: {e}"
-            st.chat_message("assistant").write(reply)
-            st.session_state["messages_gpt"].append({"role": "assistant", "content": reply})
-            # ✅ Auto-save conversation
-            save_conversation_if_ready(conn, cursor, "messages_gpt", "chat_gpt")
-            
-    # ----- TAB: แชทพร้อมไฟล์ -----
-    with tab_file:
-        st.caption("📂 วิเคราะห์ไฟล์ด้วย GPT + Vector Search")
-        uploaded_file = st.file_uploader("📂 กรุณาอัปโหลดไฟล์", type=["txt", "md", "csv"], key="file_upload")
+                st.error(f"❌ Error: {e}")
 
-        # ประมวลผลเวกเตอร์
-        if uploaded_file and OPENAI_API_KEY and "chain" not in st.session_state:
-            process_file_to_chain(uploaded_file)
+    show_download_section()
 
-        # ถามจากเวกเตอร์
-        if "chain" in st.session_state:
-            st.markdown("---")
-            st.info("💬 ถามจากเวกเตอร์ (Vector Search)")
-            chat_with_vector_chain()
 
-            # ✅ Auto-save conversation
-            save_conversation_if_ready(conn, cursor, "messages_vector_chain", "chat_file")
-            
 # ========== Choice 2: เพิ่ม/เลือก Prompt ==========
 elif tab_choice == "🧠 สนทนากับ Prompt":
     st.subheader("🧠 สนทนากับ Prompt")
 
-    tab_chat, tab_file, tab_manage = st.tabs([
+    tab_chat, tab_manage = st.tabs([
         "💬 Prompt สำหรับแชททั่วไป",
-        "📁 Prompt พร้อมไฟล์",
         "✍️ บันทึก / จัดการ Prompt"
     ])
 
     # ===== TAB 1: 💬 Prompt สำหรับแชททั่วไป =====
     with tab_chat:
         st.caption("💬 ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
+
         prompts = list_prompts()
         prompt_dict = {name: content for name, content in prompts}
 
         if prompt_dict:
-            selected_prompt_name = st.selectbox("🧠 เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector_chat")
+            selected_prompt_name = st.selectbox("🧠 เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector")
             selected_prompt = prompt_dict[selected_prompt_name]
 
             with st.expander("📜 ข้อความ Prompt ที่เลือก"):
                 st.code(selected_prompt)
 
-            st.session_state.setdefault("messages_prompt", [])
-            if not st.session_state["messages_prompt"] or st.session_state.get("active_prompt") != selected_prompt_name:
-                st.session_state["messages_prompt"] = [{"role": "system", "content": selected_prompt}]
-                st.session_state["active_prompt"] = selected_prompt_name
+            # 💬 ประวัติการสนทนา
+            st.session_state.setdefault("chat_all_in_one", [])
+            for msg in st.session_state["chat_all_in_one"]:
+                st.chat_message(msg["role"]).write(msg["content"])
 
-            for msg in st.session_state["messages_prompt"]:
-                if msg["role"] != "system":
-                    st.chat_message(msg["role"]).write(msg["content"])
-
-            if prompt := st.chat_input("💬 พิมพ์ข้อความของคุณ", key="prompt_chat_input"):
+            # 💬 Input จากผู้ใช้
+            if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
-                st.session_state["messages_prompt"].append({"role": "user", "content": prompt})
+                st.session_state["chat_all_in_one"].append({
+                    "role": "user",
+                    "content": prompt
+                })
 
-                try:
-                    response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=st.session_state["messages_prompt"]
-                    )
-                    reply = response.choices[0].message.content
-                except Exception as e:
-                    reply = f"❌ Error: {e}"
+                if prompt.strip() == "ขอไฟล์" and st.session_state.get("analysis_result"):
+                    st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์")
+                    st.session_state["show_download"] = True
+                else:
+                    try:
+                        file_content = st.session_state.get("file_text", "")
+                        base_messages = [
+                            {"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"},
+                            {"role": "user", "content": f"Prompt: {selected_prompt}"}
+                        ]
+                        if file_content:
+                            base_messages.append({
+                                "role": "user",
+                                "content": f"เนื้อหาในไฟล์:\n{file_content[:3000]}"
+                            })
+                        base_messages.append({"role": "user", "content": prompt})
 
-                st.chat_message("assistant").write(reply)
-                st.session_state["messages_prompt"].append({"role": "assistant", "content": reply})
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=base_messages
+                        )
+                        reply = response.choices[0].message.content
+                        usage = response.usage
 
-                # ✅ Auto-save conversation
-                save_conversation_if_ready(conn, cursor, "messages_prompt", "prompt_chat")
+                        st.chat_message("assistant").write(reply)
+
+                        st.session_state["chat_all_in_one"].append({
+                            "role": "assistant", "content": reply
+                        })
+                        st.session_state["analysis_result"] = reply
+                        st.session_state["show_download"] = False
+
+                        # บันทึกประวัติการสนทนา
+                        st.session_state["messages_gpt"] = base_messages + [{
+                            "role": "assistant",
+                            "content": reply,
+                            "prompt_tokens": usage.prompt_tokens,
+                            "completion_tokens": usage.completion_tokens,
+                            "total_tokens": usage.total_tokens
+                        }]
+
+                        save_conversation_if_ready(
+                            conn, cursor, "messages_gpt", "chat_gpt",
+                            prompt_tokens=usage.prompt_tokens,
+                            completion_tokens=usage.completion_tokens,
+                            total_tokens=usage.total_tokens
+                        )
+
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+
+            # 📥 ปุ่มดาวน์โหลด (ถ้ามีการขอไฟล์)
+            show_download_section()
+
         else:
             st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✍️ บันทึก / จัดการ Prompt'")
-
-    # ===== TAB 2: 📁 Prompt พร้อมไฟล์ =====
-    with tab_file:
-        st.caption("📂 วิเคราะห์ไฟล์ด้วย Prompt หรือถามจากเวกเตอร์")
-        prompts = list_prompts()
-        prompt_dict = {name: content for name, content in prompts}
-        selected_prompt = None
-
-        if prompt_dict:
-            selected_prompt_name = st.selectbox("🧠 เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector_tab_file")
-            selected_prompt = prompt_dict[selected_prompt_name]
-            with st.expander("📜 แสดงเนื้อหา Prompt"):
-                st.code(selected_prompt)
-        else:
-            st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มก่อนเริ่ม")
-
-        uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (.txt, .md, .csv, .xlsx)", type=["txt", "md", "csv", "xlsx"], key="file_upload_tab_file")
-
-        if uploaded_file and selected_prompt and "chain" not in st.session_state:
-            process_uploaded_file_for_prompt(uploaded_file)
-            process_file_to_chain(uploaded_file)
-
-        if "chain" in st.session_state:
-            st.markdown("---")
-            st.info("💬 ถามจากเนื้อหาไฟล์ (Vector Search)")
-            chat_with_vector_chain()
-
-        if selected_prompt and st.session_state.get("file_content"):
-            if st.button("📊 วิเคราะห์เนื้อหาทั้งหมดด้วย Prompt นี้"):
-                analyze_all_chunks_with_prompt(selected_prompt, selected_prompt_name)
-
-        if st.session_state.get("messages_prompt_file_analysis"):
-            st.markdown("---")
-            st.info("🧠 ถามต่อจากผลการวิเคราะห์ Prompt")
-
-            messages = st.session_state["messages_prompt_file_analysis"]
-            for msg in messages:
-                if msg["role"] != "system":
-                    st.chat_message(msg["role"]).write(msg["content"])
-
-            if prompt := st.chat_input("💬 ถามเกี่ยวกับผลวิเคราะห์ Prompt", key="chat_prompt_followup"):
-                st.chat_message("user").write(prompt)
-                messages.append({"role": "user", "content": prompt})
-
-                try:
-                    response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=messages
-                    )
-                    reply = response.choices[0].message.content
-                except Exception as e:
-                    reply = f"❌ Error: {e}"
-
-                st.chat_message("assistant").write(reply)
-                messages.append({"role": "assistant", "content": reply})
-
-            with st.expander("📥 ดาวน์โหลดผลลัพธ์จาก Prompt"):
-                prepare_download_response(source_key="messages_prompt_file_analysis", key_suffix="download_prompt_file")
-            # ✅ Auto-save conversation
-            save_conversation_if_ready(conn, cursor, "messages_prompt_file_analysis", "prompt_file")
 
     # ===== TAB 3: ✍️ บันทึก / จัดการ Prompt =====
     with tab_manage:
@@ -239,10 +264,10 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
         # ===== เพิ่ม Prompt ใหม่ =====
         prompt_name = st.text_input("📝 ตั้งชื่อ Prompt ใหม่", key="prompt_name_input_create")
-        prompt_content = st.text_area("📄 เนื้อหา Prompt", height=120, key="prompt_content_input_create")
+        content = st.text_area("📄 เนื้อหา Prompt", height=120, key="prompt_content_input_create")
         if st.button("💾 บันทึก Prompt", key="save_prompt_create"):
-            if prompt_name and prompt_content:
-                save_prompt(prompt_name, prompt_content)
+            if prompt_name and content:
+                save_prompt(prompt_name, content)
                 st.success(f"✅ บันทึก Prompt “{prompt_name}” เรียบร้อยแล้ว")
                 st.rerun()
             else:
@@ -271,13 +296,20 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
         else:
             st.info("ℹ️ ยังไม่มี Prompt ในระบบ")
                
-# ========== Choice 4: History ==========
+# ========== Choice 3: History ==========
 elif tab_choice == "📜 ประวัติการสนทนา":
     st.subheader("📜 ประวัติการสนทนา")
+#=========== หน้ากรอก user id   ===========
+    user_id = st.session_state.get("user_id")
+    role = st.session_state.get("Role", "").lower()
+
+    if role in ["admin", "super admin"]:
+        convs = list_conversations()
+    else:
+        convs = list_conversations(user_id)
     if "messages_history" not in st.session_state:
         st.session_state["messages_history"] = []
-
-    convs = list_conversations(user_id)
+#=========== หน้ากรอก user id   ===========
     label_map = {
     f"{name} ({created_at})": conv_id
     for conv_id, user_id, name, source, created_at in convs}
@@ -285,33 +317,52 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
     if selected != "- เลือก -":
         conv_id = label_map[selected]
-        cursor.execute("SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id", (conv_id,))
-        messages = [{"role": r, "content": c} for r, c in cursor.fetchall()]
+        cursor.execute("""
+            SELECT role, content, prompt_tokens, completion_tokens, total_tokens
+            FROM messages
+            WHERE conversation_id = ?
+            ORDER BY id
+        """, (conv_id,))
 
+        rows = cursor.fetchall()
+        messages = []
+        for r, c, p, comp, total in rows:
+            messages.append({
+                "role": r,
+                "content": c,
+                "prompt_tokens": p,
+                "completion_tokens": comp,
+                "total_tokens": total
+            })
+            
         if not st.session_state["messages_history"] or st.session_state.get("conv_id") != conv_id:
             st.session_state["messages_history"] = messages
             st.session_state["conv_id"] = conv_id
 
         for msg in st.session_state["messages_history"]:
-            st.chat_message(msg["role"]).write(msg["content"])
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["messages"])
+                if msg["role"] == "assistant" and msg.get("total_tokens"):
+                    st.caption(f"🔢 Tokens: total={msg['total_tokens']}, prompt={msg['prompt_tokens']}, completion={msg['completion_tokens']}")
 
         if prompt := st.chat_input("💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"):
             st.chat_message("user").write(prompt)
-            st.session_state["messages_history"].append({"role": "user", "content": prompt})
+            st.session_state["messages_history"].append({"role": "user", "messages": prompt})
 
             try:
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=st.session_state["messages_history"]
                 )
-                reply = response.choices[0].message.content
+                reply = response.choices[0].message.messages
+                total_tokens = response.usage.total_tokens
             except Exception as e:
                 reply = f"❌ Error: {e}"
 
             st.chat_message("assistant").write(reply)
             st.session_state["messages_history"].append({"role": "assistant", "content": reply})
             # ✅ Auto-save conversation
-            save_conversation_if_ready(conn, cursor, "mmessages_history", "chat_history")
+            save_conversation_if_ready(conn, cursor, "messages_history", "chat_history")
             
         with st.expander("🗑️ ลบบทสนทนานี้"):
             if st.button("ยืนยันการลบ", key="confirm_delete_conv"):
@@ -348,7 +399,7 @@ elif tab_choice == "📜 ประวัติการสนทนา":
                     mime=mime_type
                 )
 
-# ========== Choice 5 : วิธีการใช้งาน ==========
+# ========== Choice 4 : วิธีการใช้งาน ==========
 if tab_choice == "📘 วิธีการใช้งาน":
     st.subheader("📘 วิธีการใช้งานโปรแกรม")
     tab_intro, tab_howto, tab_tip = st.tabs(["🧩 คุณสมบัติของโปรแกรม", "💡 วิธีใช้งาน Chatai","💡 เคล็ดลับเพิ่มเติม"])
@@ -397,7 +448,6 @@ if tab_choice == "📘 วิธีการใช้งาน":
         - รองรับ `.txt`, `.md`, `.csv`
         - เลือกไฟล์ > คลิก "▶️ ประมวลผลไฟล์"
         - สามารถถามคำถามที่เกี่ยวข้องกับเนื้อหาในไฟล์ได้
-        - บันทึกบทสนทนาเกี่ยวกับเอกสารด้วยปุ่ม "💾 บันทึกบทสนทนา"
 
         ---
 
@@ -441,10 +491,13 @@ if tab_choice == "📘 วิธีการใช้งาน":
 
         ---
 
-        ### 🔄 ใช้ปุ่ม “🆕 เริ่มแชทใหม่”
+        ### อธิบายวิธีใช้ปุ่มด้านข้าง
+        # ปุ่ม “🆕 เริ่มแชทใหม่”
         - ทุกแท็บมีปุ่มนี้ เพื่อเริ่มต้นสนทนาใหม่จากศูนย์
         - เหมาะเมื่อเปลี่ยนบริบทคำถาม หรือมีข้อมูลใหม่
-
+        # ปุ่ม “🔄 รีเฟรชหน้า”
+        - ทุกแท็บมีปุ่มนี้
+        
         ---
 
         ### 📥 ดาวน์โหลดผลลัพธ์หลายรูปแบบ
@@ -456,10 +509,17 @@ if tab_choice == "📘 วิธีการใช้งาน":
 
         ---
 
-        ### 💾 อย่าลืมบันทึกบทสนทนา
-        - คลิกปุ่ม “💾 บันทึกบทสนทนา” เพื่อเก็บบทสนทนาไว้ใช้ภายหลัง
+        ### 💾 บันทึกบทสนทนาได้อัตโนมัติ!
         - สามารถดูย้อนหลังได้ในเมนู **📜 ประวัติการสนทนา**
         - แชทต่อจากเดิม หรืออัปเดตบทสนทนาเก่าได้
 
         ---
         """)
+            
+# Footer ด้านล่างสุด
+st.markdown("""
+    <hr style='margin-top: 3rem;'>
+    <div style='text-align: center; color: gray;'>
+        Provide ระบบสำหรับ วิลล่า มาร์เก็ตเจพี โดยยูนิคอร์น เทค อินทริเกรชั่น
+    </div>
+""", unsafe_allow_html=True)
