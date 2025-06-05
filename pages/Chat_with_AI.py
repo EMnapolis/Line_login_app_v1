@@ -1,5 +1,5 @@
 #page/chat_with_ai.py
-from utility import *   #ทุกอย่างจากไฟล์ utility.py
+from utility_chat import *   #ทุกอย่างจากไฟล์ utility.py
 from config import OPENAI_API_KEY
 from dotenv import load_dotenv
 load_dotenv()

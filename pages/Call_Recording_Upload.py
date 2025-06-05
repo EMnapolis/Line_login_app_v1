@@ -8,7 +8,7 @@ from call_upload_utils import (
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id_db, log_failed
 )
-from utility import *
+from utility_chat import *
 
 CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
 
