@@ -362,20 +362,20 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
         for msg in st.session_state["messages_history"]:
             with st.chat_message(msg["role"]):
-                st.markdown(msg["messages"])
+                st.markdown(msg["content"])
                 if msg["role"] == "assistant" and msg.get("total_tokens"):
                     st.caption(f"🔢 Tokens: total={msg['total_tokens']}, prompt={msg['prompt_tokens']}, completion={msg['completion_tokens']}")
 
         if prompt := st.chat_input("💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"):
             st.chat_message("user").write(prompt)
-            st.session_state["messages_history"].append({"role": "user", "messages": prompt})
+            st.session_state["messages_history"].append({"role": "user", "content": prompt})
 
             try:
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=st.session_state["messages_history"]
                 )
-                reply = response.choices[0].message.messages
+                reply = response.choices[0].message.content
                 total_tokens = response.usage.total_tokens
             except Exception as e:
                 reply = f"❌ Error: {e}"

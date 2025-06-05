@@ -104,21 +104,5 @@ else:
         file_name=f"{table_name}.csv",
         mime="text/csv"
     )
-
-    # # ✅ เพิ่มปุ่มแสดง JSON ถ้าเป็นตาราง raw_json
-    # if table_name == "raw_json" and "response_json" in df.columns and df["response_json"].notna().any():
-    #     st.markdown("---")
-    #     st.subheader("🔍 ตรวจสอบ JSON ต้นฉบับ")
-
-    #     for i, row in df.iterrows():
-    #         if pd.notna(row["response_json"]):
-    #             label = f"🧾 แถว {i}"
-    #             if "message_id" in row:
-    #                 label += f" | message_id: {row['message_id']}"
-
-    #             with st.expander(label):
-    #                 try:
-    #                     st.json(json.loads(row["response_json"]))
-    #                 except Exception:
-    #                     st.code(row["response_json"])
+                    
 
