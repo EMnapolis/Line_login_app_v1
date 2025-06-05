@@ -70,8 +70,6 @@ CREATE TABLE IF NOT EXISTS raw_json (
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 
-
-
 -- ===========================================
 -- Table: sent_records
 -- ใช้เก็บ record ที่เคย "ส่งออก" ไปแล้ว เช่นส่งไป LINE Notify

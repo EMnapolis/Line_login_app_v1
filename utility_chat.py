@@ -3,6 +3,7 @@ import streamlit as st
 import os
 import sqlite3
 import pandas as pd
+from io import StringIO
 from io import BytesIO
 from openai import OpenAI
 from datetime import datetime
@@ -249,7 +250,7 @@ def delete_prompt(name):
     conn.close()
 
 ## ============================== เกี่ยวกับไฟล์ ==============================
-# ===== 🔍 ฟังก์ชันตรวจสอบและแปลง encoding ของไฟล์ =====
+# ===== ตรวจจับ encoding และแปลงเป็นข้อความ =====
 def try_decode_file(file_bytes: bytes) -> str:
     """พยายามแปลง byte เป็นข้อความโดยตรวจสอบ encoding"""
     try:
@@ -263,7 +264,7 @@ def try_decode_file(file_bytes: bytes) -> str:
         return file_bytes.decode("utf-8")
     except UnicodeDecodeError:
         return file_bytes.decode("iso-8859-1", errors="replace")
-# ===== 📂 การอัปโหลดไฟล์และสร้างเวกเตอร์ RAG Chain =====
+# ===== ประมวลผลไฟล์และสร้าง RAG Chain =====
 def process_file_to_chain(uploaded_file):
     """แปลงไฟล์เป็นเวกเตอร์ และสร้าง RAG Chain สำหรับโต้ตอบจากเนื้อหา"""
     if not uploaded_file:
@@ -320,7 +321,7 @@ def append_chat(role, content, state_key="chat_history"):
         "role": role,
         "content": content
     })
-# ===== 📄 แปลงไฟล์เป็นเอกสารสำหรับ RAG Chain =====
+# ===== แปลงไฟล์เป็น Document สำหรับ LLM =====
 def get_split_docs(uploaded_file):
     """แปลงไฟล์ที่อัปโหลดเป็นเอกสาร Document แบบเดียว"""
     file_name = uploaded_file.name.lower()
@@ -362,48 +363,74 @@ def process_uploaded_file_for_prompt(uploaded_file):
 
 # 📥 ปุ่มดาวน์โหลดผลลัพธ์ AI (txt / md)
 def show_download_section():
-    if st.session_state.get("show_download") and st.session_state.get("analysis_result"):
+    if st.session_state.get("show_download"):
         st.markdown("### 📥 ดาวน์โหลดผลลัพธ์")
 
         file_format = st.selectbox(
             "📄 เลือกรูปแบบไฟล์", 
-            ["txt", "md", "csv"],  # ✅ เพิ่ม csv
+            ["txt", "csv", "xlsx"],
             key="download_format"
         )
+
         file_name = st.text_input(
             "📁 ตั้งชื่อไฟล์", 
             value="analysis_result", 
             key="download_filename"
         )
 
-        content = st.session_state["analysis_result"]
         full_filename = f"{file_name.strip()}.{file_format}"
-
-        # แสดงเนื้อหา preview
-        with st.expander("🔍 แสดงเนื้อหาที่จะบันทึก"):
-            if file_format == "md":
-                st.markdown(content)
-            elif file_format == "csv":
-                try:
-                    # พยายามแปลงเนื้อหาเป็น DataFrame ถ้าเป็นไปได้
-                    df = pd.read_csv(BytesIO(content.encode("utf-8")))
-                    st.dataframe(df)
-                except Exception:
-                    st.text("⚠️ ไม่สามารถแสดงผลในรูปแบบตารางได้\n\n" + content)
-            else:
-                st.text(content)
-
-        # สร้างไฟล์ให้ดาวน์โหลด
         file_bytes = BytesIO()
-        file_bytes.write(content.encode("utf-8"))
+
+        # ▶️ กรณีเป็นตาราง (csv, xlsx)
+        if file_format in ["csv", "xlsx"] and st.session_state.get("analysis_result_table") is not None:
+            raw_data = st.session_state["analysis_result_table"]
+
+            # 🧠 ตรวจสอบรูปแบบข้อมูลและสร้าง DataFrame
+            if isinstance(raw_data, list):
+                if all(isinstance(item, list) for item in raw_data):
+                    # ⛳️ list of list → แยก header กับข้อมูล
+                    if len(raw_data) >= 2:
+                        header = raw_data[0]
+                        rows = raw_data[1:]
+                        df = pd.DataFrame(rows, columns=header)
+                    else:
+                        st.warning("⚠️ ไม่มีข้อมูลให้แสดง")
+                        return
+                elif all(isinstance(item, dict) for item in raw_data):
+                    df = pd.DataFrame(raw_data)
+                else:
+                    st.warning("⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)")
+                    return
+            else:
+                st.warning("⚠️ ไม่สามารถแปลงข้อมูลเป็นตารางได้")
+                return
+
+            with st.expander("🔍 แสดงผลลัพธ์แบบตาราง"):
+                st.dataframe(df)
+
+            if file_format == "csv":
+                df.to_csv(file_bytes, index=False, encoding="utf-8-sig")
+                mime_type = "text/csv"
+            elif file_format == "xlsx":
+                with pd.ExcelWriter(file_bytes, engine="xlsxwriter") as writer:
+                    df.to_excel(writer, index=False, sheet_name="Result")
+                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        else:
+            # ▶️ กรณีเป็นข้อความธรรมดา (txt)
+            content = st.session_state.get("analysis_result", "")
+            if not content.strip():
+                st.warning("⚠️ ไม่มีข้อมูลสำหรับบันทึกเป็นไฟล์ข้อความ")
+                return
+
+            with st.expander("🔍 แสดงเนื้อหาที่จะบันทึก"):
+                st.text(content)
+            file_bytes.write(content.encode("utf-8"))
+            mime_type = "text/plain"
+
         file_bytes.seek(0)
 
-        mime_type = {
-            "txt": "text/plain",
-            "md": "text/markdown",
-            "csv": "text/csv"  # ✅ MIME type สำหรับ CSV
-        }[file_format]
-
+        # ⬇️ ปุ่มดาวน์โหลด
         st.download_button(
             label="⬇️ ดาวน์โหลดผลลัพธ์",
             data=file_bytes,
