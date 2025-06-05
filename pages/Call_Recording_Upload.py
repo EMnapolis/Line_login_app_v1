@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import os
 from call_upload_utils import (
+    vl3cx_login, vl3cx_refresh_token,
     fetch_json, process_records, load_sent_rec_ids_db,
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id_db, log_failed
@@ -28,12 +29,24 @@ if DEBUG:
         st.session_state["displayName"] = "ทดสอบระบบ TEST"
         st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
         st.session_state["status"] = "APPROVED"
+        st.session_state["role"] = "super admin"
         st.info("🔧 Loaded mock user session for debugging.")
 
+# ========== Role ==========
+role = st.session_state.get("role", "").lower()
+# "super admin" , "admin" , "user"
 
-#def render_page():
+# ตั้งค่าเริ่มต้น session_state ให้ปลอดภัย
+# ป้องกัน KeyError หรือ AttributeError โดยตั้งค่าก่อน
+for key in ["access_token", "refresh_token", "tmp_token"]:
+    if key not in st.session_state:
+        st.session_state[key] = ""
+
+#เริ่มต้นการทำงานของหน้า pages/Call_Recording_Upload.py
+st.set_page_config(page_title="ระบบ Call Recording Upload", page_icon="🎙️", layout="wide")
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🎙️ ระบบ Call Recording Upload")
+
 #---------------
 # ✅ ตรวจ login และสิทธิ์
 if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
@@ -42,22 +55,49 @@ if "user_id" not in st.session_state or st.session_state.get("status") != "APPRO
 #---------------
 
 # Left Pane Menu
-menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำงาน", "คุณสมบัติของโปรแกรม", "วิธีติดตั้ง และการใช้งาน"])
+menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำงาน", "คุณสมบัติของโปรแกรม", "วิธีการใช้งาน"])
 
 if menu == "หน้าคำสั่งทำงาน":
-    #st.title("VillaMarket Call Recording Processor")
+    with st.expander("🔐 ขยายเพื่อแก้ไข Tmp Token ระบบ Villa 3CX", expanded=False):
+        vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([1,2,1,2])
+        with vl3cx1:
+            if st.button("Villa3CXLogin"):
+                access_token, refresh_token = vl3cx_login()
+                if access_token and refresh_token:
+                    st.session_state.access_token = access_token
+                    st.session_state.refresh_token = refresh_token
+                    st.session_state.login_status = "✅ Login success!"
+                else:
+                    st.session_state.login_status = "❌ Login failed."
+        with vl3cx2:
+            if "login_status" in st.session_state:
+                st.markdown(st.session_state.login_status)
 
-    tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
-                              value="", type="password",
-                              help="กรอก tmp_token จาก 3CX Dashboard (ดูวิธีใน 'วิธีติดตั้ง และการใช้งาน')")
+        with vl3cx3:
+            if st.button("Refresh Token"):
+                if st.session_state.refresh_token:
+                    new_token = vl3cx_refresh_token(st.session_state.refresh_token)
+                    if new_token:
+                        st.session_state.tmp_token = new_token
+                        st.session_state.refresh_status = "✅ Token refreshed!"
+                    else:
+                        st.session_state.refresh_status = "❌ Refresh failed."
+                else:
+                    st.session_state.refresh_status = "⚠️ Login first."
+        with vl3cx4:
+            if "refresh_status" in st.session_state:
+                st.markdown(st.session_state.refresh_status)
 
-    # st.markdown("<small><b>ChatCenter Access Token (chat_token)</b></small>", unsafe_allow_html=True)
+        tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
+                                value=st.session_state.tmp_token, type="password",
+                                help="กรอก tmp_token จาก 3CX Dashboard (ดูวิธีใน 'วิธีการใช้งาน')")
+
     with st.expander("🔐 ขยายเพื่อแก้ไข Chat Token และ Contact ID", expanded=False):
         chat_token = st.text_input("ChatCenter Access Token (chat_token)",
                                    value = CHAT_TOKEN_VL,type="password",
                                    help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    col1, col2, col3 = st.columns([1,3,4]) # แบ่งคอลัมน์ให้แสดงผล 
+    col1, col2, col3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
     with col1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**"):
@@ -65,7 +105,10 @@ if menu == "หน้าคำสั่งทำงาน":
                 st.session_state.pop(key, None)
             st.rerun()
     with col2:
-        mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        if role == "admin" or role == "super admin":
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
+        else:
+            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่","ดึงข้อมูลจากวันที่"])
     with col3:
         st.markdown("""
     1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  
@@ -99,19 +142,30 @@ if menu == "หน้าคำสั่งทำงาน":
                 if df.empty:
                     st.warning("ไม่มีข้อมูลจาก 3CX API ในช่วงเวลาที่เลือก")
                 else:
-                    total_count = len(df) # จำนวนข้อมูลทั้งหมดที่ได้มา
-                    sent_ids = load_sent_rec_ids_db() # โหลด recId ที่เคยส่งไปแล้ว
-                    df["Id"] = df["Id"].astype(str) # แปลงให้เป็น string เพื่อเปรียบเทียบ
-                    df_new = df[~df["Id"].isin(sent_ids)] # กรองรายการที่ยังไม่เคยส่ง
-                    new_count = len(df_new) # จำนวนที่ยังไม่เคยส่ง
-                    old_count = total_count - new_count # จำนวนที่เคยส่งแล้ว
+                    total_count = len(df)                   # จำนวนข้อมูลทั้งหมดที่ได้มา
+                    sent_ids = load_sent_rec_ids_db()       # โหลด recId ที่เคยส่งไปแล้ว
+                    df["Id"] = df["Id"].astype(str)         # แปลงให้เป็น string เพื่อเปรียบเทียบ
+                    df_new = df[~df["Id"].isin(sent_ids)]   # กรองรายการที่ยังไม่เคยส่ง
+                    new_count = len(df_new)                 # จำนวนที่ยังไม่เคยส่ง
+                    old_count = total_count - new_count     # จำนวนที่เคยส่งแล้ว
 
                     # เก็บข้อมูลไว้ใน session สำหรับนำไปประมวลผล
                     st.session_state["df_new"] = df_new
                     st.session_state["ready_to_process"] = new_count > 0
-
-                    # แสดงผลลัพธ์ว่าเจอทั้งหมดกี่รายการ และมีกี่รายการที่ยังไม่เคยส่ง
-                    st.info(f"🔢 ทั้งหมด: {total_count} รายการ | ✅ เคยส่งแล้ว: {old_count} | 🆕 รอประมวลผล: {new_count}")
+                    
+                    result1, result2 = st.columns([2,1])
+                    with result1:
+                        # แสดงผลลัพธ์ว่าเจอทั้งหมดกี่รายการ และมีกี่รายการที่ยังไม่เคยส่ง
+                        st.info(f"🔢 ทั้งหมด: {total_count} รายการ | ✅ เคยส่งแล้ว: {old_count} | 🆕 รอประมวลผล: {new_count}")
+                    with result2:
+                        # ทำปุ่ม ดาวน์โหลด ข้อมูลที่เป็นรายการใหม่
+                        if role == "super admin":
+                            st.download_button(
+                                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",   # ป้ายปุ่ม
+                                data=st.session_state["df_new"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
+                                file_name="JSON_data.csv",          # ตั้งชื่อไฟล์ดาวน์โหลด
+                                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
+                            )
 
     elif mode == "ประมวลผลจาก recId โดยตรง":
         rec_id = st.text_input("กรุณาใส่ recId")
@@ -149,12 +203,13 @@ if st.session_state.get("ready_to_process") and not st.session_state.get("proces
 # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
 if st.session_state.get("processed"):
     st.success("🎉 ประมวลผลเสร็จสิ้น")
-    st.download_button(
-        label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
-        data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
-        file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
-        mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
-    )
+    if role == "super admin":
+        st.download_button(
+            label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
+            data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
+            file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
+            mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
+        )
 
 elif menu == "คุณสมบัติของโปรแกรม":
     st.header("คุณสมบัติของโปรแกรม")
@@ -189,23 +244,8 @@ elif menu == "คุณสมบัติของโปรแกรม":
     ```
     """)
 
-elif menu == "วิธีติดตั้ง และการใช้งาน":
-    st.header("📘 วิธีติดตั้งและการใช้งานระบบบันทึกเสียง 3CX")
-
-    st.subheader("ขั้นตอนการติดตั้ง")
-    st.markdown("""
-    ✅ **1. ติดตั้ง Python 3**  
-    ดาวน์โหลดจาก [python.org](https://www.python.org/downloads/) และติดตั้งให้เรียบร้อย
-
-    ✅ **2. ติดตั้งไลบรารีที่จำเป็น**  
-    เปิด Command Prompt หรือ Terminal แล้วพิมพ์:  
-    ```bash
-    pip install streamlit pandas requests
-    ```
-
-    ✅ **3. เปิดใช้งานโปรแกรม**  
-    ดับเบิลคลิกที่ไฟล์ `run_streamlit.bat` เพื่อเปิดหน้าเว็บแอปพลิเคชัน
-    """)
+elif menu == "วิธีการใช้งาน":
+    st.header("📘 วิธีใช้งานระบบบันทึกเสียง 3CX")
 
     st.subheader("วิธีใช้งาน")
     st.markdown("""
@@ -234,27 +274,6 @@ elif menu == "วิธีติดตั้ง และการใช้ง�
 
     st.info("💡 เคล็ดลับ: Token มีอายุจำกัด หากระบบแจ้ง Error ให้ดึงใหม่ตามขั้นตอนข้างต้น")
 
-    st.subheader("🐞 วิธีแก้ปัญหา: โปรแกรมไม่ได้ติดตั้งที่ C:\\Villa\\Python Recording Upload")
-    st.markdown("""
-    หากคุณ **ย้ายโฟลเดอร์โปรแกรมไปไว้ที่ตำแหน่งอื่น** หรือไม่ได้ติดตั้งไว้ที่ `C:\\Villa\\Python Recording Upload`  
-    อาจพบว่า **ดับเบิลคลิก `run_streamlit.bat` แล้วโปรแกรมไม่เปิด** หรือเปิดแล้วไม่พบไฟล์ `main.py`
-
-    ✅  **วิธีแก้ไข:** 
-    1. คลิกขวาที่ไฟล์ `run_streamlit.bat` แล้วเลือก **Edit**  
-    2. แก้ไขบรรทัดนี้ (บรรทัดที่ 2):
-    ```bat
-    cd /d "C:\\Villa\\Python Recording Upload"
-    ```
-    > ให้เปลี่ยนเป็น **ตำแหน่งที่แท้จริงของโฟลเดอร์ที่คุณเก็บโปรแกรมไว้** เช่น:
-    ```bat
-    cd /d "D:\\MyProjects\\3CX_Uploader"
-    ```
-
-    3. บันทึกไฟล์ แล้วลองดับเบิลคลิกใหม่อีกครั้ง
-
-    """)
-
-
 
 # Footer ด้านล่างสุด
 st.markdown("""
@@ -263,7 +282,3 @@ st.markdown("""
         Provide ระบบสำหรับ วิลล่า มาร์เก็ตเจพี โดยยูนิคอร์น เทค อินทริเกรชั่น
     </div>
 """, unsafe_allow_html=True)
-
-
-
-
