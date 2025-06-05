@@ -18,40 +18,59 @@ CREATE TABLE IF NOT EXISTS access_login (
 -- เก็บข้อมูล "หัวข้อบทสนทนา" ระหว่างระบบกับผู้ใช้
 -- เป็น master table ที่เชื่อมไปยัง messages
 -- ===========================================
+-- สร้างตาราง conversations สำหรับเก็บบทสนทนาแต่ละชุด
 CREATE TABLE IF NOT EXISTS conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,                   -- รหัสบทสนทนา (Auto Increment)
-    user_id TEXT NOT NULL,                                  -- รหัสผู้ใช้เจ้าของบทสนทนา
-    name TEXT NOT NULL,                                     -- ชื่อหรือหัวข้อของบทสนทนา
-    source TEXT,                                            -- แหล่งที่มาของการสนทนา เช่น chat_gpt, line_bot
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP          -- เวลาที่สร้างบทสนทนา
+    id INTEGER PRIMARY KEY AUTOINCREMENT,           -- รหัสบทสนทนา
+    user_id TEXT NOT NULL,                          -- รหัสผู้ใช้
+    title TEXT,                                     -- ชื่อบทสนทนา (เพิ่มใหม่)
+    source TEXT,                                    -- แหล่งที่มา เช่น 'chat_gpt' หรืออื่นๆ
+    prompt_tokens INTEGER,                          -- จำนวน token ของ prompt
+    completion_tokens INTEGER,                      -- จำนวน token ของคำตอบที่ AI สร้าง
+    total_tokens INTEGER,                           -- token รวมของข้อความนี้
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- เวลาที่สร้างบทสนทนา
 );
 
--- ===========================================
--- Table: messages
--- เก็บข้อความในแต่ละบทสนทนา (ข้อความระหว่าง user กับ AI)
--- ใช้เชื่อมกับ table conversations
--- ===========================================
+-- สร้างตาราง messages สำหรับเก็บข้อความในแต่ละบทสนทนา
 CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,                   -- รหัสข้อความแต่ละบรรทัด
-    user_id TEXT NOT NULL,                                  -- รหัสผู้ใช้ที่เป็นเจ้าของข้อความ
-    conversation_id INTEGER,                                -- รหัสบทสนทนาที่ข้อความนี้สังกัด
-    role TEXT,                                              -- บทบาท: user, assistant, system
-    content TEXT,                                           -- เนื้อหาข้อความ
-    total_tokens INTEGER,                                   -- จำนวน token ที่ข้อความนี้ใช้ (สำหรับวิเคราะห์ cost)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,         -- เวลาที่ข้อความถูกบันทึก
+    id INTEGER PRIMARY KEY AUTOINCREMENT,           -- รหัสของข้อความแต่ละรายการ
+    user_id TEXT NOT NULL,                          -- รหัสของผู้ใช้เจ้าของข้อความ
+    conversation_id INTEGER,                        -- รหัสบทสนทนาที่ข้อความนี้อยู่
+    role TEXT,                                      -- บทบาทของข้อความ: user, assistant, system
+    content TEXT,                                   -- เนื้อหาของข้อความ
+    prompt_tokens INTEGER,                          -- จำนวน token ของ prompt
+    completion_tokens INTEGER,                      -- จำนวน token ของคำตอบที่ AI สร้าง
+    total_tokens INTEGER,                           -- token รวมของข้อความนี้
+    response_json TEXT,                             -- ✅ เก็บ JSON ทั้ง body ที่ได้จาก GPT API
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- เวลาที่บันทึกข้อความนี้
     FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
--- ===========================================
--- Table: prompts
--- สำหรับเก็บข้อความ prompt (คำสั่ง หรือ system message)
--- ที่ต้องใช้ซ้ำ เช่น “สรุปข้อความ”, “โครงเรื่อง”
+-- สร้างตาราง prompts สำหรับเก็บ Prompt ที่ผู้ใช้สร้างขึ้นเอง
 CREATE TABLE IF NOT EXISTS prompts (
-    name TEXT,
-    user_id TEXT NOT NULL,
-    content TEXT,
-    PRIMARY KEY (name, user_id)
+    prompt_name TEXT,                             -- ชื่อเรียกของ prompt (ตั้งเองได้)
+    user_id TEXT NOT NULL,                        -- รหัสของผู้ใช้ที่สร้าง prompt
+    content TEXT,                                 -- เนื้อหา prompt
+    prompt_tokens INTEGER,                        -- token ที่ใช้สำหรับ prompt
+    completion_tokens INTEGER,                    -- token ที่ใช้สำหรับคำตอบจาก AI
+    total_tokens INTEGER,                         -- token รวมทั้งหมด
+    PRIMARY KEY (prompt_name, user_id)            -- ป้องกันชื่อ prompt ซ้ำกันในผู้ใช้คนเดียวกัน
 );
+
+-- ===========================================
+-- Table: raw_json
+-- ใช้เก็บ JSON ต้นฉบับจาก GPT API แบบเต็ม
+-- ===========================================
+CREATE TABLE IF NOT EXISTS raw_json (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,            -- รหัสอัตโนมัติ
+    conversation_id INTEGER,                         -- รหัสบทสนทนา (อ้างอิงถึง conversations.id)
+    message_id INTEGER NOT NULL,                     -- รหัสข้อความ (อ้างอิงถึง messages.id)
+    response_json TEXT NOT NULL,                     -- JSON ต้นฉบับจาก GPT API
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- เวลาที่เก็บ JSON นี้
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+
 
 -- ===========================================
 -- Table: sent_records

@@ -1,9 +1,5 @@
-#Database
-import pandas as pd
-import sqlite3
-import streamlit as st
-import os
-import tiktoken
+#pages/Database.py
+from utility_chat import *
 
 DB_PATH = "data/sqdata.db"
 # ----------------------------
@@ -34,11 +30,11 @@ def count_tokens(text, model="gpt-3.5-turbo"):
     return len(enc.encode(text or ""))
 
 def fetch_table(table_name):
-    if not os.path.exists(DB_PATH):
-        st.error(f"❌ ไม่พบไฟล์ฐานข้อมูล: {DB_PATH}")
+    if not os.path.exists(db_path):
+        st.error(f"❌ ไม่พบไฟล์ฐานข้อมูล: {db_path}")
         return pd.DataFrame()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(db_path)
         df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
         conn.close()
 
@@ -57,7 +53,8 @@ TABLES = {
     "บทสนทนา (conversations)": "conversations",
     "ข้อความ (messages)": "messages",
     "Prompts": "prompts",
-    "ส่งออกแล้ว (sent_records)": "sent_records"
+    "ส่งออกแล้ว (sent_records)": "sent_records",
+    "JSON ต้นฉบับ (raw_jsons)": "raw_json"
 }
 
 st.title("📊 ข้อมูลจากฐานข้อมูล")
@@ -107,3 +104,21 @@ else:
         file_name=f"{table_name}.csv",
         mime="text/csv"
     )
+
+    # # ✅ เพิ่มปุ่มแสดง JSON ถ้าเป็นตาราง raw_json
+    # if table_name == "raw_json" and "response_json" in df.columns and df["response_json"].notna().any():
+    #     st.markdown("---")
+    #     st.subheader("🔍 ตรวจสอบ JSON ต้นฉบับ")
+
+    #     for i, row in df.iterrows():
+    #         if pd.notna(row["response_json"]):
+    #             label = f"🧾 แถว {i}"
+    #             if "message_id" in row:
+    #                 label += f" | message_id: {row['message_id']}"
+
+    #             with st.expander(label):
+    #                 try:
+    #                     st.json(json.loads(row["response_json"]))
+    #                 except Exception:
+    #                     st.code(row["response_json"])
+
