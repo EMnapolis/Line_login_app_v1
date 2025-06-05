@@ -393,6 +393,7 @@ elif tab_choice == "📜 ประวัติการสนทนา":
                 st.session_state["messages_history"] = []
                 st.success("✅ ลบบทสนทนาเรียบร้อยแล้ว")
                 st.stop()
+                
         # ✅ ปุ่มดาวน์โหลดบทสนทนาเป็นไฟล์
         if st.session_state.get("messages_history"):
             with st.expander("📥 ดาวน์โหลดบทสนทนาเป็นไฟล์"):
