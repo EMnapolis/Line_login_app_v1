@@ -14,7 +14,7 @@ def load_credentials_from_base64():
     key_b64 = os.getenv("GOOGLE_KEY_B64")
     if not key_b64:
         raise ValueError("GOOGLE_KEY_B64 ไม่พบใน environment")
-
+    
     key_json = base64.b64decode(key_b64).decode("utf-8")
     with open("temp_key.json", "w", encoding="utf-8") as f:
         f.write(key_json)
