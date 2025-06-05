@@ -99,15 +99,13 @@ def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **
                 conv_id = cursor.lastrowid
                 st.session_state[conv_key] = conv_id
 
-            # ➕ เพิ่มข้อความใหม่
             for msg in messages[last_saved_count:]:
                 cursor.execute("""
                     INSERT INTO messages (
                         user_id, conversation_id, role, content,
-                        prompt_tokens, completion_tokens, total_tokens,
-                        response_json
+                        prompt_tokens, completion_tokens, total_tokens
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     st.session_state["user_id"],
                     conv_id,
@@ -116,8 +114,19 @@ def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **
                     msg.get("prompt_tokens"),
                     msg.get("completion_tokens"),
                     msg.get("total_tokens"),
-                    msg.get("response_json", None)  # ✅ เผื่อบาง msg ไม่มี json
                 ))
+                message_id = cursor.lastrowid
+
+                # ✅ แก้ตรงนี้ให้เก็บ conversation_id กับ message_id ให้ถูก
+                if "response_json" in msg:
+                    cursor.execute("""
+                        INSERT INTO raw_json (conversation_id, message_id, response_json)
+                        VALUES (?, ?, ?)
+                    """, (
+                        conv_id,
+                        message_id,
+                        msg["response_json"]
+                    ))
 
             conn.commit()
             st.session_state[last_key] = len(messages)

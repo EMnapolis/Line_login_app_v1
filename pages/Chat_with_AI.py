@@ -88,9 +88,17 @@ with st.sidebar:
 
     with col2:
         if st.button("🆕 เริ่มแชทใหม่", key="reset_chat"):
-            st.session_state["messages_gpt"] = []
-            st.session_state["conversation_id"] = None
-            st.session_state["last_saved_count"] = 0
+            for key in [
+                "messages_gpt",
+                "chat_all_in_one",
+                "conversation_id_messages_gpt",
+                "conversation_id_chat_all_in_one",
+                "last_saved_count_messages_gpt",
+                "last_saved_count_chat_all_in_one",
+                "analysis_result",
+                "show_download"
+            ]:
+                st.session_state.pop(key, None)
             st.rerun()
 #---------------
 # ========== TAB 1: Chat with GPT ==========

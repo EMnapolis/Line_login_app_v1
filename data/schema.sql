@@ -56,6 +56,21 @@ CREATE TABLE IF NOT EXISTS prompts (
     PRIMARY KEY (prompt_name, user_id)            -- ป้องกันชื่อ prompt ซ้ำกันในผู้ใช้คนเดียวกัน
 );
 
+-- ===========================================
+-- Table: raw_json
+-- ใช้เก็บ JSON ต้นฉบับจาก GPT API แบบเต็ม
+-- ===========================================
+CREATE TABLE IF NOT EXISTS raw_json (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,            -- รหัสอัตโนมัติ
+    conversation_id INTEGER,                         -- รหัสบทสนทนา (อ้างอิงถึง conversations.id)
+    message_id INTEGER NOT NULL,                     -- รหัสข้อความ (อ้างอิงถึง messages.id)
+    response_json TEXT NOT NULL,                     -- JSON ต้นฉบับจาก GPT API
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- เวลาที่เก็บ JSON นี้
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+
 
 -- ===========================================
 -- Table: sent_records

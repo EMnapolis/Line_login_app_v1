@@ -34,7 +34,8 @@ TABLES = {
     "บทสนทนา (conversations)": "conversations",
     "ข้อความ (messages)": "messages",
     "Prompts": "prompts",
-    "ส่งออกแล้ว (sent_records)": "sent_records"
+    "ส่งออกแล้ว (sent_records)": "sent_records",
+    "JSON ต้นฉบับ (raw_jsons)": "raw_json"
 }
 
 st.title("📊 ข้อมูลจากฐานข้อมูล")
@@ -55,16 +56,21 @@ else:
         file_name=f"{table_name}.csv",
         mime="text/csv"
     )
-    
-if "response_json" in df.columns and df["response_json"].notna().any():
-    st.caption("📦 แสดง JSON ต้นฉบับจาก GPT")
 
-    if st.button("🔍 แสดง JSON แถวแรก"):
-        raw_json = df["response_json"].dropna().iloc[0]
-        with st.expander("🔍 ดู JSON แถวแรก", expanded=True):
-            try:
-                st.json(json.loads(raw_json))
-            except Exception:
-                st.code(raw_json)
-else:
-    st.info("❗ ไม่มีข้อมูล JSON ในตารางนี้")
+    # ✅ เพิ่มปุ่มแสดง JSON ถ้าเป็นตาราง raw_json
+    if table_name == "raw_json" and "response_json" in df.columns and df["response_json"].notna().any():
+        st.markdown("---")
+        st.subheader("🔍 ตรวจสอบ JSON ต้นฉบับ")
+
+        for i, row in df.iterrows():
+            if pd.notna(row["response_json"]):
+                label = f"🧾 แถว {i}"
+                if "message_id" in row:
+                    label += f" | message_id: {row['message_id']}"
+
+                with st.expander(label):
+                    try:
+                        st.json(json.loads(row["response_json"]))
+                    except Exception:
+                        st.code(row["response_json"])
+
