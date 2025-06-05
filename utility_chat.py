@@ -172,7 +172,13 @@ def list_conversations(user_id=None):
     db_path = os.path.join("data", "sqdata.db")
     conn = sqlite3.connect(db_path, check_same_thread=False)
 
-    query = "SELECT id, user_id, title, source, created_at FROM conversations"
+    # เพิ่ม token columns
+    query = """
+        SELECT id, user_id, title, source,
+               prompt_tokens, completion_tokens, total_tokens,
+               created_at
+        FROM conversations
+    """
     params = ()
 
     if user_id:
