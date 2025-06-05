@@ -195,6 +195,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
         if prompt_dict:
             selected_prompt_name = st.selectbox("🧠 เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector")
             selected_prompt = prompt_dict[selected_prompt_name]
+        # ===== 📤 ส่วนอัปโหลดไฟล์ก่อนเลือก Prompt =====
 
             with st.expander("📜 ข้อความ Prompt ที่เลือก"):
                 st.code(selected_prompt)
@@ -203,7 +204,13 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             st.session_state.setdefault("chat_all_in_one", [])
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
-
+                
+            uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
+            if uploaded_file:
+                process_uploaded_file_for_prompt(uploaded_file)
+                st.session_state["uploaded_filename"] = uploaded_file.name
+                st.caption(f"📎 ใช้ไฟล์: {uploaded_file.name}")
+                
             # 💬 Input จากผู้ใช้
             if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
@@ -217,7 +224,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                     st.session_state["show_download"] = True
                 else:
                     try:
-                        file_content = st.session_state.get("file_text", "")
+                        file_content = st.session_state.get("file_content", "")
                         base_messages = [
                             {"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"},
                             {"role": "user", "content": f"Prompt: {selected_prompt}"}
@@ -278,7 +285,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
         # ===== เพิ่ม Prompt ใหม่ =====
         prompt_name = st.text_input("📝 ตั้งชื่อ Prompt ใหม่", key="prompt_name_input_create")
-        content = st.text_area("📄 เนื้อหา Prompt", height=120, key="prompt_content_input_create")
+        content = st.text_area("📄 เนื้อหา Prompt", height=120, key="content_input_create")
         if st.button("💾 บันทึก Prompt", key="save_prompt_create"):
             if prompt_name and content:
                 save_prompt(prompt_name, content)
