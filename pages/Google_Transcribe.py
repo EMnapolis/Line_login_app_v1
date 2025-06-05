@@ -86,6 +86,34 @@ def delete_temp_audio(file_path):
 # จบการประกาศใช้ ฟังก์ชัน
 #--------------------
 
+# ----------------------------
+# ⚙️ Debug Mode Configuration
+# ----------------------------
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+if DEBUG:
+    # ตั้งค่า session ผู้ใช้ mock สำหรับการทดสอบ
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "Udebug123456"
+        st.session_state["displayName"] = "ทดสอบระบบ TEST"
+        st.session_state["pictureUrl"] = "https://i.imgur.com/1Q9Z1Zm.png"
+        st.session_state["status"] = "APPROVED"
+        st.session_state["role"] = "super admin"
+        st.info("🔧 Loaded mock user session for debugging.")
+
+# ========== Role ==========
+role = st.session_state.get("role", "").lower()
+# "super admin" , "admin" , "user"
+
+#---------------
+# ✅ ตรวจ login และสิทธิ์
+if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
+    st.error("🚫 กรุณาเข้าสู่ระบบ และรอการอนุมัติ")
+    st.stop()
+
+#---------------
+# เริ่มต้น Fontend
+#---------------
 st.set_page_config(page_title="Google STT", layout="wide")
 
 # Header ด้านบนขวา
