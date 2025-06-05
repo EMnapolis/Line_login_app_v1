@@ -1,8 +1,5 @@
 #page/chat_with_ai.py
 from utility_chat import *   #ทุกอย่างจากไฟล์ utility.py
-from config import OPENAI_API_KEY
-from dotenv import load_dotenv
-load_dotenv()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 # เชื่อมต่อ SQLite
@@ -39,12 +36,8 @@ DEFAULT_SYSTEM_PROMPT = "คุณคือผู้ช่วยที่สา�
 # ========== ตั้งค่าหน้า Streamlit ==========
 CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
 
-# DB_FILE = os.path.join("data", "sqdata.db")
-# def get_connection():
-#     return sqlite3.connect(DB_FILE)
 # ========== Role ==========
 role = st.session_state.get("Role", "")
-
 
 # ----------------------------
 # ⚙️ Debug Mode Configuration
@@ -61,8 +54,6 @@ if DEBUG:
         st.session_state["Role"] = "user"
         st.info("🔧 Loaded mock user session for debugging.")
 
-
-#def render_page():
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🤖 AI Chat Platform")
 #---------------
@@ -110,8 +101,7 @@ if tab_choice == "💬 สนทนากับ GPT":
 
     if uploaded_file:
         try:
-            file_bytes = uploaded_file.read()
-            file_content = read_uploaded_file(uploaded_file.name, file_bytes)
+            file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
             st.session_state["file_text"] = file_content
             st.text_area("📄 ตัวอย่างเนื้อหาไฟล์", file_content[:1000], height=200, disabled=True)
         except Exception as e:
@@ -141,13 +131,13 @@ if tab_choice == "💬 สนทนากับ GPT":
                 base_messages = [{"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"}]
 
                 if file_content:
-                    truncated = file_content[:3000].rsplit("\n", 1)[0]
-                    base_messages.append({"role": "user", "content": f"เนื้อหาในไฟล์:\n{truncated}"})
+                    base_messages.append({"role": "user", "content": f"เนื้อหาในไฟล์ทั้งหมด:\n{file_content}"})
+
 
                 base_messages.append({"role": "user", "content": prompt})
 
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o",
                     messages=base_messages
                 )
 
@@ -211,43 +201,43 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
         "💬 Prompt สำหรับแชททั่วไป",
         "✍️ บันทึก / จัดการ Prompt"
     ])
-
-
     # ===== TAB 1: 💬 Prompt สำหรับแชททั่วไป =====
     with tab_chat:
-        st.caption("💬 ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
+        st.caption("ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
 
         prompts = list_prompts()
         prompt_dict = {name: content for name, content in prompts}
 
         if prompt_dict:
-            selected_prompt_name = st.selectbox("🧠 เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector")
+            selected_prompt_name = st.selectbox("เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector")
             selected_prompt = prompt_dict[selected_prompt_name]
 
-            with st.expander("📜 ข้อความ Prompt ที่เลือก"):
+            with st.expander("ข้อความ Prompt ที่เลือก"):
                 st.code(selected_prompt)
 
             st.session_state.setdefault("chat_all_in_one", [])
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-            uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
+            uploaded_file = st.file_uploader("อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
             if uploaded_file:
-                process_uploaded_file_for_prompt(uploaded_file)
+                file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
+                st.session_state["file_content"] = file_content
+                st.session_state["analysis_results"] = []
                 st.session_state["uploaded_filename"] = uploaded_file.name
-                st.caption(f"📎 ใช้ไฟล์: {uploaded_file.name}")
+                st.caption(f"ใช้ไฟล์: {uploaded_file.name}")
+                st.text_area("แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True)
 
-            if st.button("📊 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก"):
+            if st.button("🔍 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก"):
                 try:
                     file_content = st.session_state.get("file_content", "")
-                    truncated = file_content[:3000].rsplit("\n", 1)[0] if file_content else ""
-
-                    full_input = f"""คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{truncated}"""
+                    full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"  # ❗ ไม่ truncate แล้ว
 
                     from utility_chat import call_openai_with_parsing
                     reply, df_result, usage, raw_json = call_openai_with_parsing(
                         full_input,
-                        system_prompt="คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์")
+                        system_prompt="คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์"
+                    )
 
                     if df_result is not None:
                         st.session_state["analysis_result_table"] = [df_result.columns.tolist()] + df_result.values.tolist()
@@ -263,24 +253,21 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         {"role": "system", "content": "คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์"},
                         {"role": "user", "content": full_input},
                         {
-                            "role": "assistant",
-                            "content": reply,
+                            "role": "assistant", "content": reply,
                             "prompt_tokens": usage.prompt_tokens,
                             "completion_tokens": usage.completion_tokens,
                             "total_tokens": usage.total_tokens,
                             "response_json": raw_json
                         }
                     ]
-
                     save_conversation_if_ready(
                         conn, cursor, "messages_gpt", "chat_gpt",
                         prompt_tokens=usage.prompt_tokens,
                         completion_tokens=usage.completion_tokens,
                         total_tokens=usage.total_tokens
                     )
-
                 except Exception as e:
-                    st.error(f"❌ เกิดข้อผิดพลาดระหว่างวิเคราะห์ไฟล์: {e}")
+                    st.error(f"เกิดข้อผิดพลาด: {e}")
 
             if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
@@ -292,12 +279,12 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 else:
                     try:
                         file_content = st.session_state.get("file_content", "")
-                        truncated = file_content[:3000].rsplit("\n", 1)[0] if file_content else ""
+                        full_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{file_content}"  # ❗ ไม่ truncate แล้ว
 
-                        full_input = f"""คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{truncated}"""
                         reply, df_result, usage, raw_json = call_openai_with_parsing(
                             full_input,
-                            system_prompt="คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี")
+                            system_prompt="คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"
+                        )
 
                         if df_result is not None:
                             st.session_state["analysis_result_table"] = [df_result.columns.tolist()] + df_result.values.tolist()
@@ -313,26 +300,26 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             {"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"},
                             {"role": "user", "content": full_input},
                             {
-                                "role": "assistant",
-                                "content": reply,
+                                "role": "assistant", "content": reply,
                                 "prompt_tokens": usage.prompt_tokens,
                                 "completion_tokens": usage.completion_tokens,
                                 "total_tokens": usage.total_tokens,
                                 "response_json": raw_json
-                            }]
-
+                            }
+                        ]
                         save_conversation_if_ready(
                             conn, cursor, "messages_gpt", "chat_gpt",
                             prompt_tokens=usage.prompt_tokens,
                             completion_tokens=usage.completion_tokens,
-                            total_tokens=usage.total_tokens)
+                            total_tokens=usage.total_tokens
+                        )
                     except Exception as e:
-                        st.error(f"❌ Error: {e}")
+                        st.error(f"Error: {e}")
 
             show_download_section()
         else:
-            st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✍️ บันทึก / จัดการ Prompt'")
-        
+            st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✨ บันทึก / จัดการ Prompt'")
+
     # ===== TAB 3: ✍️ บันทึก / จัดการ Prompt =====
     with tab_manage:
         st.caption("✍️ เพิ่ม ลบ หรือแก้ไข Prompt ที่ใช้ในระบบ")
@@ -426,7 +413,7 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
             try:
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o",
                     messages=st.session_state["messages_history"]
                 )
                 reply = response.choices[0].message.content
