@@ -344,21 +344,58 @@ def get_split_docs(uploaded_file):
     return docs, file_content
 # ===== 🧠 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก =====
 def process_uploaded_file_for_prompt(uploaded_file):
-    """โหลดไฟล์เพื่อใช้ร่วมกับ Prompt"""
     try:
         uploaded_file.seek(0)
-        docs, file_content = get_split_docs(uploaded_file)
+        file_name = uploaded_file.name.lower()
 
-        st.session_state["split_docs"] = docs
+        if file_name.endswith(".txt"):
+            file_content = uploaded_file.read().decode("utf-8", errors="ignore")
+        elif file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+            file_content = df.to_csv(index=False)
+        elif file_name.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file)
+            file_content = df.to_csv(index=False)
+        else:
+            raise ValueError("ไม่รองรับประเภทไฟล์นี้")
+
         st.session_state["file_content"] = file_content
         st.session_state["analysis_results"] = []
 
         st.success("✅ โหลดเนื้อหาไฟล์เรียบร้อยแล้ว")
-        st.text_area("📄 แสดงเนื้อหาไฟล์", file_content, height=200, disabled=True)
+        st.text_area("📄 แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True)
 
     except Exception as e:
         st.error(f"❌ ไม่สามารถประมวลผลไฟล์ได้: {e}")
-        st.stop()   
+        st.stop()
+
+def call_openai_with_parsing(full_input, system_prompt):
+    base_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": full_input}
+    ]
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=base_messages
+    )
+
+    reply = response.choices[0].message.content
+    usage = response.usage
+    raw_json = json.dumps(response.model_dump(), ensure_ascii=False)
+
+    df_result = None
+    try:
+        if "|" in reply and "---" in reply:
+            lines = [line for line in reply.splitlines() if "|" in line and not line.strip().startswith("---")]
+            cleaned = "\n".join(lines)
+            df_result = pd.read_csv(StringIO(cleaned), sep="|").dropna(axis=1, how="all")
+        elif "," in reply:
+            df_result = pd.read_csv(StringIO(reply))
+    except Exception:
+        df_result = None
+
+    return reply, df_result, usage, raw_json
 ## ============================== เกี่ยวกับไฟล์ ==============================
 
 # 📥 ปุ่มดาวน์โหลดผลลัพธ์ AI (txt / md)
