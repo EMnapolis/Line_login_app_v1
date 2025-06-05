@@ -17,13 +17,14 @@ from langchain.docstore.document import Document
 from charset_normalizer import from_bytes
 from dotenv import load_dotenv
 import tiktoken
-
+import json
 
 #==== global path ====
 db_folder = os.path.join("data")
 db_path = os.path.join("data", "sqdata.db")
 schema_path = os.path.join("data", "schema.sql")
 user_id = st.session_state.get("user_id")
+
 #==== global path ====
 
 # ✅ โหลดจาก config.py แทนการใช้ os.getenv() เอง
@@ -103,9 +104,10 @@ def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **
                 cursor.execute("""
                     INSERT INTO messages (
                         user_id, conversation_id, role, content,
-                        prompt_tokens, completion_tokens, total_tokens
+                        prompt_tokens, completion_tokens, total_tokens,
+                        response_json
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     st.session_state["user_id"],
                     conv_id,
@@ -114,6 +116,7 @@ def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **
                     msg.get("prompt_tokens"),
                     msg.get("completion_tokens"),
                     msg.get("total_tokens"),
+                    msg.get("response_json", None)  # ✅ เผื่อบาง msg ไม่มี json
                 ))
 
             conn.commit()

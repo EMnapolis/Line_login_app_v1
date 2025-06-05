@@ -138,7 +138,9 @@ if tab_choice == "💬 สนทนากับ GPT":
 
                 reply = response.choices[0].message.content
                 usage = response.usage
-
+                
+                raw_json = json.dumps(response.model_dump(), ensure_ascii=False)
+                
                 st.chat_message("assistant").write(reply)
                 st.session_state["chat_all_in_one"].append({"role": "assistant", "content": reply})
                 st.session_state["analysis_result"] = reply
@@ -149,7 +151,8 @@ if tab_choice == "💬 สนทนากับ GPT":
                     "content": reply,
                     "prompt_tokens": usage.prompt_tokens,
                     "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens
+                    "total_tokens": usage.total_tokens,
+                    "response_json": raw_json
                 }]
 
                 save_conversation_if_ready(
@@ -224,7 +227,8 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         )
                         reply = response.choices[0].message.content
                         usage = response.usage
-
+                        raw_json = json.dumps(response.model_dump(), ensure_ascii=False)
+                        
                         st.chat_message("assistant").write(reply)
 
                         st.session_state["chat_all_in_one"].append({
@@ -239,14 +243,16 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             "content": reply,
                             "prompt_tokens": usage.prompt_tokens,
                             "completion_tokens": usage.completion_tokens,
-                            "total_tokens": usage.total_tokens
+                            "total_tokens": usage.total_tokens,
+                            "response_json": raw_json
                         }]
 
                         save_conversation_if_ready(
                             conn, cursor, "messages_gpt", "chat_gpt",
                             prompt_tokens=usage.prompt_tokens,
                             completion_tokens=usage.completion_tokens,
-                            total_tokens=usage.total_tokens
+                            total_tokens=usage.total_tokens,
+                            
                         )
 
                     except Exception as e:

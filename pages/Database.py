@@ -1,9 +1,5 @@
 #pages/Database.py
-import pandas as pd
-import sqlite3
-import streamlit as st
-import os
-import tiktoken
+from utility_chat import *
 
 DB_PATH = "data/sqdata.db"
 
@@ -59,3 +55,16 @@ else:
         file_name=f"{table_name}.csv",
         mime="text/csv"
     )
+    
+if "response_json" in df.columns and df["response_json"].notna().any():
+    st.caption("📦 แสดง JSON ต้นฉบับจาก GPT")
+
+    if st.button("🔍 แสดง JSON แถวแรก"):
+        raw_json = df["response_json"].dropna().iloc[0]
+        with st.expander("🔍 ดู JSON แถวแรก", expanded=True):
+            try:
+                st.json(json.loads(raw_json))
+            except Exception:
+                st.code(raw_json)
+else:
+    st.info("❗ ไม่มีข้อมูล JSON ในตารางนี้")
