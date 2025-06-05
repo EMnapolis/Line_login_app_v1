@@ -35,6 +35,7 @@ if DEBUG:
 # ========== Role ==========
 role = st.session_state.get("role", "").lower()
 # "super admin" , "admin" , "user"
+# TEST
 
 # ตั้งค่าเริ่มต้น session_state ให้ปลอดภัย
 # ป้องกัน KeyError หรือ AttributeError โดยตั้งค่าก่อน
