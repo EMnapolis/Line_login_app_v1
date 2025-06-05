@@ -2,6 +2,7 @@
 # =============================
 # รายชื่อไลบรารีที่จำเป็นสำหรับติดตั้ง
 
+setuptools>=65.5.0
 streamlit>=1.18.0
 requests
 pandas
@@ -13,7 +14,6 @@ chromadb>=0.4.24
 python-dotenv
 protobuf==3.20.3
 openpyxl
-google-cloud-storage
 google-cloud-speech
 google-auth
 #
