@@ -59,7 +59,7 @@ menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำ�
 
 if menu == "หน้าคำสั่งทำงาน":
     with st.expander("🔐 ขยายเพื่อแก้ไข Tmp Token ระบบ Villa 3CX", expanded=False):
-        vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([1,2,1,2])
+        vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([3,2,3,2])
         with vl3cx1:
             if st.button("Villa3CXLogin"):
                 access_token, refresh_token = vl3cx_login()
@@ -101,14 +101,13 @@ if menu == "หน้าคำสั่งทำงาน":
     with col1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**"):
-            for key in ["ready_to_process", "processed", "df_new", "processed_df"]:
+            for key in ["ready_to_process", "processed", "df_new"
+                    , "processed_df","full_df", "selected_ids"]:
                 st.session_state.pop(key, None)
+                
             st.rerun()
     with col2:
-        if role == "admin" or role == "super admin":
-            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่", "ประมวลผลจาก recId โดยตรง"])
-        else:
-            mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่","ดึงข้อมูลจากวันที่"])
+        mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่"])
     with col3:
         st.markdown("""
     1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  
@@ -127,89 +126,129 @@ if menu == "หน้าคำสั่งทำงาน":
         with col2:
             to_date = st.date_input("To Date", value=default_date)  # วันที่สิ้นสุด
 
+        # getjson1, getjson2 = st.columns(2)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
+        # with getjson1:
         # ปุ่มสั่งดึงข้อมูล JSON จาก 3CX
         if st.button("📥 ดึงข้อมูล JSON จาก 3CX"):
-            # ตรวจสอบว่ามี token ทั้งสองหรือไม่
             if not tmp_token or not chat_token:
                 st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
             else:
-                # เรียกฟังก์ชัน fetch_json เพื่อดึงข้อมูล JSON จาก API โดยใช้ tmp_token และช่วงวันที่
                 with st.spinner("กำลังดึงข้อมูล JSON จาก 3CX..."):
-                    json_data = fetch_json(tmp_token, from_date, to_date) # ดึง JSON จาก 3CX
-                    df = pd.json_normalize(json_data.get("value", [])) # แปลง JSON เป็น DataFrame
+                    json_data = fetch_json(tmp_token, from_date, to_date)
+                    df = pd.json_normalize(json_data.get("value", []))
 
-                # ตรวจสอบว่าได้ข้อมูลกลับมามั้ย ถ้าไม่มีข้อมูล
                 if df.empty:
                     st.warning("ไม่มีข้อมูลจาก 3CX API ในช่วงเวลาที่เลือก")
                 else:
-                    total_count = len(df)                   # จำนวนข้อมูลทั้งหมดที่ได้มา
-                    sent_ids = load_sent_rec_ids_db()       # โหลด recId ที่เคยส่งไปแล้ว
-                    df["Id"] = df["Id"].astype(str)         # แปลงให้เป็น string เพื่อเปรียบเทียบ
-                    df_new = df[~df["Id"].isin(sent_ids)]   # กรองรายการที่ยังไม่เคยส่ง
-                    new_count = len(df_new)                 # จำนวนที่ยังไม่เคยส่ง
-                    old_count = total_count - new_count     # จำนวนที่เคยส่งแล้ว
+                    df["Id"] = df["Id"].astype(str)
+                    sent_ids = load_sent_rec_ids_db()
+                    df["already_sent"] = df["Id"].isin(sent_ids)
 
-                    # เก็บข้อมูลไว้ใน session สำหรับนำไปประมวลผล
-                    st.session_state["df_new"] = df_new
-                    st.session_state["ready_to_process"] = new_count > 0
-                    
-                    result1, result2 = st.columns([2,1])
-                    with result1:
-                        # แสดงผลลัพธ์ว่าเจอทั้งหมดกี่รายการ และมีกี่รายการที่ยังไม่เคยส่ง
-                        st.info(f"🔢 ทั้งหมด: {total_count} รายการ | ✅ เคยส่งแล้ว: {old_count} | 🆕 รอประมวลผล: {new_count}")
-                    with result2:
-                        # ทำปุ่ม ดาวน์โหลด ข้อมูลที่เป็นรายการใหม่
-                        if role == "super admin":
-                            st.download_button(
-                                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",   # ป้ายปุ่ม
-                                data=st.session_state["df_new"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
-                                file_name="JSON_data.csv",          # ตั้งชื่อไฟล์ดาวน์โหลด
-                                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
-                            )
+                    # 🕑 แปลงเวลา และสร้างข้อความ preview
+                    def build_message(row):
+                        try:
+                            rec_id = row["Id"]
+                            start_time_utc = datetime.strptime(row["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
+                            local_time = start_time_utc + timedelta(hours=7)
+                            start_time_str = local_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    elif mode == "ประมวลผลจาก recId โดยตรง":
-        rec_id = st.text_input("กรุณาใส่ recId")
-        if st.button("🚀 ดำเนินการจาก recId"):
-            if not tmp_token or not chat_token:
-                st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
-            elif not rec_id:
-                st.error("กรุณาใส่ recId")
+                            from_num = row["FromCallerNumber"].replace("Ext.", "")
+                            to_num = row["ToCallerNumber"]
+                            from_display = row["FromDisplayName"]
+                            to_display = row["ToDisplayName"]
+                            call_type = row["CallType"]
+
+                            if call_type == "InboundExternal":
+                                from_display_clean = from_display.split(":")[-1] if ":" in from_display else from_display
+                                return f"From_{from_num}_{from_display_clean}_To_{to_num}_{to_display}_เมื่อ_{start_time_str}"
+                            else:
+                                to_display_clean = "" if to_num == to_display else to_display
+                                msg = f"From_{from_num}_{from_display}_To_{to_num}"
+                                if to_display_clean:
+                                    msg += f"_{to_display_clean}"
+                                return f"{msg}_เมื่อ_{start_time_str}"
+                        except:
+                            return "❌ สร้างข้อความไม่สำเร็จ"
+
+                    df["preview_message"] = df.apply(build_message, axis=1)
+
+                    st.session_state["full_df"] = df
+                    st.session_state["selected_ids"] = []  # Reset selection
+               
+    if "full_df" in st.session_state:
+        df = st.session_state["full_df"]
+        ROWS_PER_PAGE = 20
+        total_rows = len(df)
+        total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
+        page = st.number_input("เลือกหน้า", min_value=1, max_value=total_pages, value=1, step=1)
+
+        start_idx = (page - 1) * ROWS_PER_PAGE
+        end_idx = start_idx + ROWS_PER_PAGE
+        paginated_df = df.iloc[start_idx:end_idx]
+
+        st.caption(f"🔢 แสดงหน้า {page} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว")
+
+        button_col1, button_col2, button_col3, button_col4 = st.columns([3, 2, 4, 1])
+        with button_col1:
+            if st.button("🔘 เลือกทั้งหมด (ทุกหน้า)"):
+                st.session_state["selected_ids"] = df[~df["already_sent"]]["Id"].tolist()
+        with button_col2:
+            if st.button("🔘 ยกเลิกทั้งหมด"):
+                st.session_state["selected_ids"] = []
+        with button_col3:
+            if st.button("🔘 เลือกเฉพาะหน้านี้"):
+                page_ids = paginated_df[~paginated_df["already_sent"]]["Id"].tolist()
+                st.session_state["selected_ids"] = list(set(st.session_state["selected_ids"] + page_ids))
+        with button_col3:
+            st.markdown("")
+
+        for _, row in paginated_df.iterrows():
+            rec_id = row["Id"]
+            preview = row["preview_message"]
+            already_sent = row["already_sent"]
+            default_checked = rec_id in st.session_state["selected_ids"]
+
+            if already_sent:
+                st.markdown(f"✅ **{rec_id}**: {preview}")
             else:
-                # โหลดรายการ rec_id ที่เคยส่งไปแล้ว เพื่อไม่ให้ทำซ้ำ
-                sent_ids = load_sent_rec_ids_db()
-                if rec_id in sent_ids:
-                    st.info("✅ recId นี้เคยถูกส่งไปแล้ว")
-                else:
-                    df_new = pd.DataFrame([{"Id": rec_id}])
-                    st.session_state["df_new"] = df_new
-                    st.session_state["ready_to_process"] = True
-                    st.success("🎯 พบ recId และพร้อมประมวลผล")
+                checked = st.checkbox(
+                    f"🆕 {rec_id}: {preview}",
+                    key=f"chk_{rec_id}",
+                    value=default_checked
+                )
+                if checked and rec_id not in st.session_state["selected_ids"]:
+                    st.session_state["selected_ids"].append(rec_id)
+                elif not checked and rec_id in st.session_state["selected_ids"]:
+                    st.session_state["selected_ids"].remove(rec_id)
 
-
-# ตรวจสอบว่า session_state มีคีย์ "ready_to_process" และค่าคือ True หรือไม่ (มีข้อมูลพร้อมให้ประมวลผล)
-if st.session_state.get("ready_to_process") and not st.session_state.get("processed"): #เงื่อนไข and น่าจะทำให้คลิีกปุ่มแล้วไม่ทำงานอะไร
-    df_new = st.session_state["df_new"]  # ดึง DataFrame รายการใหม่ที่ยังไม่เคยส่งออกมาจาก session
-    # st.info(f"📦 พร้อมประมวลผล {len(df_new)} รายการใหม่")   # แสดงจำนวนรายการใหม่ที่พร้อมประมวลผล
-
+    
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่"):
-        # เรียกฟังก์ชัน process_records เพื่อประมวลผลข้อมูล โดยใช้ df_new และ token ต่าง ๆ
-        processed_df = process_records(df_new, tmp_token, chat_token, contact_id)
-        st.session_state["processed"] = True   # บันทึกสถานะว่าได้ประมวลผลแล้ว
-        st.session_state["processed_df"] = processed_df
-        # st.rerun()  # 🔄 รีเฟรชหน้าใหม่เพื่อซ่อนปุ่ม  คอมเมนท์ไว้ ก่อน
+        if not tmp_token or not chat_token:
+            st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
+        elif not st.session_state.get("selected_ids"):
+            st.warning("กรุณาเลือกรายการ rec_id อย่างน้อยหนึ่งรายการ")
+        else:
+            selected_df = st.session_state["full_df"]
+            selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
+
+            with st.spinner("🔄 กำลังประมวลผล..."):
+                processed_df = process_records(selected_df, tmp_token, chat_token, contact_id)
+
+            st.session_state["processed"] = True
+            st.session_state["processed_df"] = processed_df
 
 
-# สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
-if st.session_state.get("processed"):
-    st.success("🎉 ประมวลผลเสร็จสิ้น")
-    if role == "super admin":
-        st.download_button(
-            label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
-            data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
-            file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
-            mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
-        )
+    # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
+    if st.session_state.get("processed"):
+        st.success("🎉 ประมวลผลเสร็จสิ้น")
+        if role == "super admin":
+            st.download_button(
+                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
+                data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
+                file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
+                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
+            )
 
 elif menu == "คุณสมบัติของโปรแกรม":
     st.header("คุณสมบัติของโปรแกรม")
