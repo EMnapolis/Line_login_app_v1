@@ -60,6 +60,7 @@ menu = st.sidebar.radio("เมนู", ["หน้าคำสั่งทำ�
 if menu == "หน้าคำสั่งทำงาน":
     with st.expander("🔐 ขยายเพื่อแก้ไข Tmp Token ระบบ Villa 3CX", expanded=False):
         vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([3,2,3,2])
+        vl3cx1, vl3cx2, vl3cx3, vl3cx4 = st.columns([3,2,3,2])
         with vl3cx1:
             if st.button("Villa3CXLogin"):
                 access_token, refresh_token = vl3cx_login()
@@ -104,6 +105,7 @@ if menu == "หน้าคำสั่งทำงาน":
             for key in ["ready_to_process", "processed", "df_new"
                     , "processed_df","full_df", "selected_ids"]:
                 st.session_state.pop(key, None)
+                
                 
             st.rerun()
     with chat_tk2:
@@ -244,6 +246,17 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.session_state["selected_ids"].remove(rec_id)
 
     
+                checked = st.checkbox(
+                    f"🆕 {rec_id}: {preview}",
+                    key=f"chk_{rec_id}",
+                    value=default_checked
+                )
+                if checked and rec_id not in st.session_state["selected_ids"]:
+                    st.session_state["selected_ids"].append(rec_id)
+                elif not checked and rec_id in st.session_state["selected_ids"]:
+                    st.session_state["selected_ids"].remove(rec_id)
+
+    
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
 
@@ -264,6 +277,16 @@ if menu == "หน้าคำสั่งทำงาน":
             st.session_state["is_processing"] = False
 
 
+    # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
+    if st.session_state.get("processed"):
+        st.success("🎉 ประมวลผลเสร็จสิ้น")
+        if role == "super admin":
+            st.download_button(
+                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
+                data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
+                file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
+                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
+            )
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
     if st.session_state.get("processed"):
         st.success("🎉 ประมวลผลเสร็จสิ้น")
