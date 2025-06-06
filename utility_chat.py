@@ -80,17 +80,13 @@ def save_conversation_if_ready(
     messages = st.session_state.get(messages_key, [])
     conv_key = f"conversation_id_{messages_key}"
     last_key = f"last_saved_count_{messages_key}"
-
     conv_id = st.session_state.get(conv_key)
     last_saved_count = st.session_state.get(last_key, 0)
     user_id = st.session_state.get("user_id", "guest")
 
-    # ⏺️ ถ้ามีข้อความใหม่
     if len(messages) >= 2 and len(messages) > last_saved_count:
         last_two = messages[-2:]
         if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
-
-            # 🧠 สร้างหัวข้อสนทนาใหม่ หากยังไม่มี conv_id
             if conv_id is None:
                 title = generate_title_from_conversation(messages)
                 cursor.execute(
@@ -100,7 +96,7 @@ def save_conversation_if_ready(
                         prompt_tokens, completion_tokens, total_tokens
                     )
                     VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     (
                         user_id,
                         title,
@@ -113,13 +109,7 @@ def save_conversation_if_ready(
                 conv_id = cursor.lastrowid
                 st.session_state[conv_key] = conv_id
 
-            # 🔁 บันทึกข้อความใหม่ลง messages
             for msg in messages[last_saved_count:]:
-                # ตั้งค่า token usage เป็น 0 หากไม่มีใน message
-                msg_prompt_tokens = msg.get("prompt_tokens", 0)
-                msg_completion_tokens = msg.get("completion_tokens", 0)
-                msg_total_tokens = msg.get("total_tokens", 0)
-
                 cursor.execute(
                     """
                     INSERT INTO messages (
@@ -127,27 +117,25 @@ def save_conversation_if_ready(
                         prompt_tokens, completion_tokens, total_tokens
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     (
                         user_id,
                         conv_id,
                         msg.get("role", "user"),
                         msg.get("content", ""),
-                        msg_prompt_tokens,
-                        msg_completion_tokens,
-                        msg_total_tokens,
+                        msg.get("prompt_tokens", 0),
+                        msg.get("completion_tokens", 0),
+                        msg.get("total_tokens", 0),
                     ),
                 )
-
                 message_id = cursor.lastrowid
 
-                # ถ้ามี response_json ให้บันทึกลง raw_json
                 if "response_json" in msg:
                     cursor.execute(
                         """
                         INSERT INTO raw_json (conversation_id, message_id, response_json)
                         VALUES (?, ?, ?)
-                    """,
+                        """,
                         (conv_id, message_id, msg["response_json"]),
                     )
 
@@ -155,12 +143,13 @@ def save_conversation_if_ready(
             st.session_state[last_key] = len(messages)
             st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}")
 
+
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
 def generate_title_from_conversation(messages):
     try:
         system_prompt = {"role": "system", "content": "You are an assistant that summarizes the topic of a conversation in 5-10 Thai words."}
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="model_name",
             messages=[system_prompt] + messages + [{"role": "user", "content": "สรุปชื่อหัวข้อของบทสนทนานี้สั้น ๆ"}]
         )
         return response.choices[0].message.content.strip()
@@ -283,7 +272,7 @@ def process_file_to_chain(uploaded_file):
             vectorstore = Chroma.from_documents(chunks, embedding=embeddings)
 
             chain = ConversationalRetrievalChain.from_llm(
-                llm=ChatOpenAI(model="gpt-4o", temperature=0, openai_api_key=OPENAI_API_KEY),
+                llm=ChatOpenAI(model="model_name", temperature=0, openai_api_key=OPENAI_API_KEY),
                 retriever=vectorstore.as_retriever(),
                 memory=ConversationBufferMemory(memory_key="chat_history", return_messages=True),
             )
@@ -386,7 +375,7 @@ def call_openai_with_parsing(full_input, system_prompt):
     ]
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="model_name",
         messages=base_messages
     )
 
@@ -429,34 +418,31 @@ def process_uploaded_file_for_prompt(uploaded_file):
         st.success("✅ โหลดเนื้อหาไฟล์เรียบร้อยแล้ว")
         st.text_area("📄 แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True)
 
+
     except Exception as e:
         st.error(f"❌ ไม่สามารถประมวลผลไฟล์ได้: {e}")
         st.stop()
-
-## ============================== เกี่ยวกับไฟล์ ==============================
-
 # 📥 ปุ่มดาวน์โหลดผลลัพธ์ AI (txt / md)
 def show_download_section():
     if st.session_state.get("show_download"):
         st.markdown("### 📥 ดาวน์โหลดผลลัพธ์")
 
         file_format = st.selectbox(
-            "📄 เลือกรูปแบบไฟล์", 
-            ["txt", "csv", "xlsx"],
-            key="download_format"
+            "📄 เลือกรูปแบบไฟล์", ["txt", "csv", "xlsx"], key="download_format"
         )
 
         file_name = st.text_input(
-            "📁 ตั้งชื่อไฟล์", 
-            value="analysis_result", 
-            key="download_filename"
+            "📁 ตั้งชื่อไฟล์", value="analysis_result", key="download_filename"
         )
 
         full_filename = f"{file_name.strip()}.{file_format}"
         file_bytes = BytesIO()
 
         # ▶️ กรณีเป็นตาราง (csv, xlsx)
-        if file_format in ["csv", "xlsx"] and st.session_state.get("analysis_result_table") is not None:
+        if (
+            file_format in ["csv", "xlsx"]
+            and st.session_state.get("analysis_result_table") is not None
+        ):
             raw_data = st.session_state["analysis_result_table"]
 
             # 🧠 ตรวจสอบรูปแบบข้อมูลและสร้าง DataFrame
@@ -473,7 +459,9 @@ def show_download_section():
                 elif all(isinstance(item, dict) for item in raw_data):
                     df = pd.DataFrame(raw_data)
                 else:
-                    st.warning("⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)")
+                    st.warning(
+                        "⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)"
+                    )
                     return
             else:
                 st.warning("⚠️ ไม่สามารถแปลงข้อมูลเป็นตารางได้")
@@ -488,7 +476,9 @@ def show_download_section():
             elif file_format == "xlsx":
                 with pd.ExcelWriter(file_bytes, engine="xlsxwriter") as writer:
                     df.to_excel(writer, index=False, sheet_name="Result")
-                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime_type = (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
         else:
             # ▶️ กรณีเป็นข้อความธรรมดา (txt)
@@ -509,5 +499,7 @@ def show_download_section():
             label="⬇️ ดาวน์โหลดผลลัพธ์",
             data=file_bytes,
             file_name=full_filename,
-            mime=mime_type
+            mime=mime_type,
         )
+
+## ============================== เกี่ยวกับไฟล์ ==============================

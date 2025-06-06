@@ -93,8 +93,14 @@ with st.sidebar:
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
-    st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเราะเคราะ")
+    st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
 
+    # TODO เลือกโมเดล
+    model_choice = st.radio(
+        "🧠 เลือกโมเดลที่ต้องการใช้", ["gpt-4o", "llama2:latest"], horizontal=True
+    )
+
+    # อัปโหลดไฟล์
     uploaded_file = st.file_uploader(
         "📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"]
     )
@@ -106,26 +112,43 @@ if tab_choice == "💬 สนทนากับ GPT":
                 "📄 ตัวอย่างเนื้อหาไฟล์", file_content[:1000], height=200, disabled=True
             )
         except Exception as e:
-            st.error(f"❌ ไม่สามารถานไฟล์ได้: {e}")
+            st.error(f"❌ ไม่สามารถอ่านไฟล์ได้: {e}")
             st.stop()
 
+    # ค่าเริ่มต้น
     file_content = st.session_state.get("file_text", "")
     st.session_state.setdefault("chat_all_in_one", [])
 
+    # แสดงบทสนทนาย้อนหลัง
     for msg in st.session_state["chat_all_in_one"]:
         st.chat_message(msg["role"]).write(msg["content"])
 
+    # ช่องพิมพ์คำถาม
     if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
-        st.chat_message("user").write(prompt)
-        st.session_state["chat_all_in_one"].append({"role": "user", "content": prompt})
+        from utility_ai import count_tokens, estimate_tokens, attach_token_count
 
+        token_fn = count_tokens if model_choice.startswith("gpt-") else estimate_tokens
+
+        # เพิ่มข้อความของผู้ใช้พร้อม token_count
+        st.chat_message("user").write(prompt)
+        st.session_state["chat_all_in_one"].append(
+            {
+                "role": "user",
+                "content": prompt,
+                "token_count": token_fn(prompt, model_choice),
+            }
+        )
+
+        # คำสั่งขอไฟล์
         if prompt.strip() == "ขอไฟล์" or (
             "save" in prompt.lower() and st.session_state.get("analysis_result")
         ):
-            st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์")
+            st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพธ์ที่ได้จาก AI")
             st.session_state["show_download"] = True
+
         else:
             try:
+                # สร้าง prompt เต็ม
                 base_messages = [
                     {
                         "role": "system",
@@ -137,57 +160,62 @@ if tab_choice == "💬 สนทนากับ GPT":
                         {"role": "user", "content": f"เนื้อหาในไฟล์ทั้งหมด:\n{file_content}"}
                     )
                 base_messages.extend(st.session_state["chat_all_in_one"])
-                # TODO model AI
-                response = client.chat.completions.create(
-                    model="gpt-4o", messages=base_messages, stream=True
-                )
 
-                reply = ""
+                # เพิ่ม token count ให้แต่ละข้อความ
+                base_messages = attach_token_count(base_messages, model=model_choice)
+
                 with st.chat_message("assistant"):
                     stream_output = st.empty()
-                    for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            word = chunk.choices[0].delta.content
-                            reply += word
-                            stream_output.markdown(reply + "▌")
-                    stream_output.markdown(reply)
+                    result = stream_response_by_model(
+                        model_choice, base_messages, stream_output
+                    )
+                    stream_output.markdown(result["reply"])
 
+                # เพิ่มข้อความตอบกลับเข้า history
                 st.session_state["chat_all_in_one"].append(
-                    {"role": "assistant", "content": reply}
+                    {
+                        "role": "assistant",
+                        "content": result["reply"],
+                        "prompt_tokens": result["prompt_tokens"],
+                        "completion_tokens": result["completion_tokens"],
+                        "total_tokens": result["total_tokens"],
+                        "response_json": result["response_json"],
+                    }
                 )
-                st.session_state["analysis_result"] = reply
+
+                # สำหรับแสดงผล / ดาวน์โหลด
+                st.session_state["analysis_result"] = result["reply"]
                 st.session_state["show_download"] = False
 
-                # นับ token เพื่อบันทึก (stream=True)
-                prompt_tokens = sum(count_tokens(m["content"]) for m in base_messages)
-                completion_tokens = count_tokens(reply)
-                total_tokens = prompt_tokens + completion_tokens
-
+                # เตรียมสำหรับ save DB
                 st.session_state["messages_gpt"] = base_messages + [
                     {
                         "role": "assistant",
-                        "content": reply,
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "total_tokens": total_tokens,
-                        "response_json": "{}",
-                    }  # stream ไม่ได้ไบบ JSON
+                        "content": result["reply"],
+                        "prompt_tokens": result["prompt_tokens"],
+                        "completion_tokens": result["completion_tokens"],
+                        "total_tokens": result["total_tokens"],
+                        "response_json": result["response_json"],
+                    }
                 ]
 
+                # บันทึกลง SQLite
                 save_conversation_if_ready(
                     conn,
                     cursor,
                     messages_key="messages_gpt",
-                    source="chat_gpt",
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=total_tokens,
+                    source=model_choice,
+                    prompt_tokens=result["prompt_tokens"],
+                    completion_tokens=result["completion_tokens"],
+                    total_tokens=result["total_tokens"],
                 )
 
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
+    # ปุ่มดาวน์โหลดผลลัพธ์
     show_download_section()
+
 
 # ========== Choice 2: เพิ่ม/เลือก Prompt ==========
 elif tab_choice == "🧠 สนทนากับ Prompt":
