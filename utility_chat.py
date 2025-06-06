@@ -3,6 +3,7 @@ import streamlit as st
 import os
 import sqlite3
 import pandas as pd
+from io import StringIO
 from io import BytesIO
 from openai import OpenAI
 from datetime import datetime
@@ -18,6 +19,8 @@ from charset_normalizer import from_bytes
 from dotenv import load_dotenv
 import tiktoken
 import json
+import time
+import math
 #==== import libary ====
 
 #==== global path ====
@@ -28,7 +31,7 @@ user_id = st.session_state.get("user_id")
 #==== global path ====
 
 # ✅ โหลดจาก config.py แทนการใช้ os.getenv() เอง
-from config import OPENAI_API_KEY, CHAT_TOKEN
+from config import OPENAI_API_KEY,CHAT_TOKEN
 
 # ===== OpenAI Client =====
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -130,7 +133,7 @@ def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **
             conn.commit()
             st.session_state[last_key] = len(messages)
             st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}")
-def send_prompt_to_gpt(prompt_text, message_key, model="gpt-3.5-turbo"):
+def send_prompt_to_gpt(prompt_text, message_key, model="gpt-4o"):
     messages = st.session_state.get(message_key, [])
     messages.append({"role": "user", "content": prompt_text})
 
@@ -160,7 +163,7 @@ def generate_title_from_conversation(messages):
     try:
         system_prompt = {"role": "system", "content": "You are an assistant that summarizes the topic of a conversation in 5-10 Thai words."}
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[system_prompt] + messages + [{"role": "user", "content": "สรุปชื่อหัวข้อของบทสนทนานี้สั้น ๆ"}]
         )
         return response.choices[0].message.content.strip()
@@ -249,23 +252,21 @@ def delete_prompt(name):
     conn.close()
 
 ## ============================== เกี่ยวกับไฟล์ ==============================
-# ===== 🔍 ฟังก์ชันตรวจสอบและแปลง encoding ของไฟล์ =====
+# ===== ตรวจจับ encoding และแปลงเป็นข้อความ =====
+# ===== ตรวจจับ encoding และแปลงเป็นข้อความ =====
 def try_decode_file(file_bytes: bytes) -> str:
-    """พยายามแปลง byte เป็นข้อความโดยตรวจสอบ encoding"""
     try:
         result = from_bytes(file_bytes).best()
         if result:
             return str(result)
     except Exception:
         pass
-
     try:
         return file_bytes.decode("utf-8")
     except UnicodeDecodeError:
         return file_bytes.decode("iso-8859-1", errors="replace")
-# ===== 📂 การอัปโหลดไฟล์และสร้างเวกเตอร์ RAG Chain =====
+# ===== ประมวลผลไฟล์และสร้าง RAG Chain =====
 def process_file_to_chain(uploaded_file):
-    """แปลงไฟล์เป็นเวกเตอร์ และสร้าง RAG Chain สำหรับโต้ตอบจากเนื้อหา"""
     if not uploaded_file:
         st.warning("⚠️ กรุณาอัปโหลดไฟล์ก่อน")
         return
@@ -274,44 +275,58 @@ def process_file_to_chain(uploaded_file):
         try:
             file_bytes = uploaded_file.read()
             file_content = try_decode_file(file_bytes)
-
             st.text_area("📖 ตัวอย่างเนื้อหา", file_content[:1000], height=200, disabled=True)
 
             doc = Document(page_content=file_content)
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=3000, chunk_overlap=300)
             chunks = splitter.split_documents([doc])
+            st.success(f"📚 แบ่งเนื้อหาออกเป็น {len(chunks)} ส่วนย่อย")
 
             embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            vectorstore = Chroma.from_documents(chunks, embeddings)
+            vectorstore = Chroma.from_documents(chunks, embedding=embeddings)
 
             chain = ConversationalRetrievalChain.from_llm(
-                llm=ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY),
+                llm=ChatOpenAI(model="gpt-4o", temperature=0, openai_api_key=OPENAI_API_KEY),
                 retriever=vectorstore.as_retriever(),
                 memory=ConversationBufferMemory(memory_key="chat_history", return_messages=True),
             )
 
-            # ✅ เก็บผลลัพธ์ไว้ใน session
             st.session_state["chain"] = chain
             st.session_state["chat_history"] = []
             st.session_state["file_content"] = file_content
-
-            st.success("✅ พร้อมใช้งาน! พิมพ์คำถามได้เลย")
+            st.success("✅ โหลดและแบ่งเนื้อหาเรียบร้อยแล้ว พร้อมใช้งาน")
 
         except Exception as e:
             st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 # ===== 🔎 อ่านเนื้อหาจากไฟล์ที่อัปโหลด =====
-def read_uploaded_file(file_name, file_bytes):
-    """ใช้แสดงผลลัพธ์แบบข้อความ จากไฟล์ต่างประเภท"""
+def read_uploaded_file(file_name, uploaded_file, chunk_size=5000):
     file_name = file_name.lower()
+    my_bar = st.progress(0, text="📥 กำลังโหลดเนื้อหาไฟล์...")
+    uploaded_file.seek(0)
+
     if file_name.endswith(".xlsx"):
-        df = pd.read_excel(BytesIO(file_bytes))
-        return df.to_string(index=False)
+        df = pd.read_excel(uploaded_file)
+        content = df.to_string(index=False)
     elif file_name.endswith(".csv"):
-        df = pd.read_csv(BytesIO(file_bytes))
-        return df.to_string(index=False)
+        df = pd.read_csv(uploaded_file)
+        content = df.to_string(index=False)
     else:
+        file_bytes = uploaded_file.read()
         result = from_bytes(file_bytes).best()
-        return str(result) if result else file_bytes.decode("utf-8")
+        content = str(result) if result else file_bytes.decode("utf-8")
+
+    total_parts = math.ceil(len(content) / chunk_size)
+    collected = []
+
+    for i in range(total_parts):
+        part = content[i * chunk_size : (i + 1) * chunk_size]
+        collected.append(part)
+        percent = int((i + 1) / total_parts * 100)
+        my_bar.progress(percent, text=f"📄 ประมวลผลส่วนที่ {i+1}/{total_parts} ({percent}%)")
+        time.sleep(0.01)
+
+    my_bar.empty()
+    return "".join(collected)
 # ===== 💬 เพิ่มข้อความลงในประวัติแชท =====
 def append_chat(role, content, state_key="chat_history"):
     """เพิ่มข้อความลงใน session chat"""
@@ -320,11 +335,12 @@ def append_chat(role, content, state_key="chat_history"):
         "role": role,
         "content": content
     })
-# ===== 📄 แปลงไฟล์เป็นเอกสารสำหรับ RAG Chain =====
-def get_split_docs(uploaded_file):
-    """แปลงไฟล์ที่อัปโหลดเป็นเอกสาร Document แบบเดียว"""
+# ===== แปลงไฟล์เป็น Document สำหรับ LLM =====
+def get_split_docs(uploaded_file, chunk_size=3000, chunk_overlap=200):
+    """แปลงไฟล์เป็นหลาย Document และแสดงความคืบหน้า"""
     file_name = uploaded_file.name.lower()
 
+    # อ่านเนื้อหาไฟล์
     if file_name.endswith(".xlsx"):
         df = pd.read_excel(uploaded_file)
         file_content = df.to_string(index=False)
@@ -338,72 +354,160 @@ def get_split_docs(uploaded_file):
             raise ValueError("ไม่สามารถตรวจจับ encoding ของไฟล์ได้")
         file_content = str(result)
 
-    # ✅ คืนเอกสารแบบเดียว (ไม่แบ่ง chunk)
-    docs = [Document(page_content=file_content)]
-    return docs, file_content
+    # สร้าง Document เดียวก่อน
+    doc = Document(page_content=file_content)
+
+    # แบ่งเป็นหลาย chunk
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    all_chunks = splitter.split_documents([doc])
+    total = len(all_chunks)
+
+    # แสดง progress
+    st.info(f"📄 แบ่งไฟล์ออกเป็น {total} ส่วน กำลังประมวลผล...")
+
+    progress_bar = st.progress(0)
+    processed_chunks = []
+    for i, chunk in enumerate(all_chunks):
+        processed_chunks.append(chunk)
+
+        # แสดงความคืบหน้า
+        percent_complete = int((i + 1) / total * 100)
+        progress_bar.progress(percent_complete)
+        time.sleep(0.01)  # จำลอง delay (ลบออกจริง)
+
+    st.success("✅ แบ่งเนื้อหาเรียบร้อย พร้อมใช้งาน!")
+
+    return processed_chunks, file_content
+# ===== เรียก GPT และพยายามแปลงผลลัพธ์เป็นตาราง (DataFrame) =====
+def call_openai_with_parsing(full_input, system_prompt):
+    from openai import OpenAI
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    base_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": full_input}
+    ]
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=base_messages
+    )
+
+    reply = response.choices[0].message.content
+    usage = response.usage
+    raw_json = json.dumps(response.model_dump(), ensure_ascii=False)
+
+    df_result = None
+    try:
+        if "|" in reply and "---" in reply:
+            lines = [line for line in reply.splitlines() if "|" in line and not line.strip().startswith("---")]
+            cleaned = "\n".join(lines)
+            df_result = pd.read_csv(StringIO(cleaned), sep="|").dropna(axis=1, how="all")
+        elif "," in reply:
+            df_result = pd.read_csv(StringIO(reply))
+    except Exception:
+        df_result = None
+
+    return reply, df_result, usage, raw_json
 # ===== 🧠 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก =====
 def process_uploaded_file_for_prompt(uploaded_file):
-    """โหลดไฟล์เพื่อใช้ร่วมกับ Prompt"""
     try:
         uploaded_file.seek(0)
-        docs, file_content = get_split_docs(uploaded_file)
+        file_name = uploaded_file.name.lower()
 
-        st.session_state["split_docs"] = docs
+        if file_name.endswith(".txt"):
+            file_content = uploaded_file.read().decode("utf-8", errors="ignore")
+        elif file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+            file_content = df.to_csv(index=False)
+        elif file_name.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file)
+            file_content = df.to_csv(index=False)
+        else:
+            raise ValueError("ไม่รองรับประเภทไฟล์นี้")
+
         st.session_state["file_content"] = file_content
         st.session_state["analysis_results"] = []
 
         st.success("✅ โหลดเนื้อหาไฟล์เรียบร้อยแล้ว")
-        st.text_area("📄 แสดงเนื้อหาไฟล์", file_content, height=200, disabled=True)
+        st.text_area("📄 แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True)
 
     except Exception as e:
         st.error(f"❌ ไม่สามารถประมวลผลไฟล์ได้: {e}")
-        st.stop()   
+        st.stop()
+
 ## ============================== เกี่ยวกับไฟล์ ==============================
 
 # 📥 ปุ่มดาวน์โหลดผลลัพธ์ AI (txt / md)
 def show_download_section():
-    if st.session_state.get("show_download") and st.session_state.get("analysis_result"):
+    if st.session_state.get("show_download"):
         st.markdown("### 📥 ดาวน์โหลดผลลัพธ์")
 
         file_format = st.selectbox(
             "📄 เลือกรูปแบบไฟล์", 
-            ["txt", "md", "csv"],  # ✅ เพิ่ม csv
+            ["txt", "csv", "xlsx"],
             key="download_format"
         )
+
         file_name = st.text_input(
             "📁 ตั้งชื่อไฟล์", 
             value="analysis_result", 
             key="download_filename"
         )
 
-        content = st.session_state["analysis_result"]
         full_filename = f"{file_name.strip()}.{file_format}"
-
-        # แสดงเนื้อหา preview
-        with st.expander("🔍 แสดงเนื้อหาที่จะบันทึก"):
-            if file_format == "md":
-                st.markdown(content)
-            elif file_format == "csv":
-                try:
-                    # พยายามแปลงเนื้อหาเป็น DataFrame ถ้าเป็นไปได้
-                    df = pd.read_csv(BytesIO(content.encode("utf-8")))
-                    st.dataframe(df)
-                except Exception:
-                    st.text("⚠️ ไม่สามารถแสดงผลในรูปแบบตารางได้\n\n" + content)
-            else:
-                st.text(content)
-
-        # สร้างไฟล์ให้ดาวน์โหลด
         file_bytes = BytesIO()
-        file_bytes.write(content.encode("utf-8"))
+
+        # ▶️ กรณีเป็นตาราง (csv, xlsx)
+        if file_format in ["csv", "xlsx"] and st.session_state.get("analysis_result_table") is not None:
+            raw_data = st.session_state["analysis_result_table"]
+
+            # 🧠 ตรวจสอบรูปแบบข้อมูลและสร้าง DataFrame
+            if isinstance(raw_data, list):
+                if all(isinstance(item, list) for item in raw_data):
+                    # ⛳️ list of list → แยก header กับข้อมูล
+                    if len(raw_data) >= 2:
+                        header = raw_data[0]
+                        rows = raw_data[1:]
+                        df = pd.DataFrame(rows, columns=header)
+                    else:
+                        st.warning("⚠️ ไม่มีข้อมูลให้แสดง")
+                        return
+                elif all(isinstance(item, dict) for item in raw_data):
+                    df = pd.DataFrame(raw_data)
+                else:
+                    st.warning("⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)")
+                    return
+            else:
+                st.warning("⚠️ ไม่สามารถแปลงข้อมูลเป็นตารางได้")
+                return
+
+            with st.expander("🔍 แสดงผลลัพธ์แบบตาราง"):
+                st.dataframe(df)
+
+            if file_format == "csv":
+                df.to_csv(file_bytes, index=False, encoding="utf-8-sig")
+                mime_type = "text/csv"
+            elif file_format == "xlsx":
+                with pd.ExcelWriter(file_bytes, engine="xlsxwriter") as writer:
+                    df.to_excel(writer, index=False, sheet_name="Result")
+                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        else:
+            # ▶️ กรณีเป็นข้อความธรรมดา (txt)
+            content = st.session_state.get("analysis_result", "")
+            if not content.strip():
+                st.warning("⚠️ ไม่มีข้อมูลสำหรับบันทึกเป็นไฟล์ข้อความ")
+                return
+
+            with st.expander("🔍 แสดงเนื้อหาที่จะบันทึก"):
+                st.text(content)
+            file_bytes.write(content.encode("utf-8"))
+            mime_type = "text/plain"
+
         file_bytes.seek(0)
 
-        mime_type = {
-            "txt": "text/plain",
-            "md": "text/markdown",
-            "csv": "text/csv"  # ✅ MIME type สำหรับ CSV
-        }[file_format]
-
+        # ⬇️ ปุ่มดาวน์โหลด
         st.download_button(
             label="⬇️ ดาวน์โหลดผลลัพธ์",
             data=file_bytes,
