@@ -158,7 +158,7 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
         current_user = users.get(current_user_id, {})
         status = current_user.get("status", "PENDING")
         role = current_user.get("role", "user")
-        picture_Url = current_user.get("pictureUrl", "")
+        picture_Url = current_user.get("Picture_url", "")
 
         can_change_status = role in {"admin", "super admin"}
         can_change_role = role == "super admin"
@@ -168,7 +168,7 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
         profile1, profile2, profile3 = st.columns([1, 4, 2])
         with profile1:
             if picture_Url:
-                st.image(picture_Url, width=80)
+                st.image(picture_Url, width=120)
             else:
                 st.warning("ไม่มีรูปโปรไฟล์")
         with profile2:
@@ -192,9 +192,9 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
                 if info.get("status") == "PENDING" and uid != current_user_id:
                     pend1, pend2, pend3 = st.columns([1, 4, 2])
                     with pend1:
-                        url = info.get("pictureUrl", "")
+                        url = info.get("Picture_url", "")
                         if url:
-                            st.image(url, width=60)
+                            st.image(url, width=80)
                         else:
                             st.warning("ไม่มีรูปโปรไฟล์")
                     with pend2:
@@ -228,15 +228,15 @@ elif menu == "🧾 ตรวจสอบรายชื่อผู้ใช้�
             col1, col2, col3, col4 = st.columns([1, 5, 1, 4])
 
             with col1:
-                url = info.get("pictureUrl", "")
+                url = info.get("Picture_url", "")
                 if url:
-                    st.image(url, width=60)
+                    st.image(url, width=80)
                 else:
                     st.warning("no image")
 
             with col2:
                 st.markdown(f"""
-                    **{display_name}**
+                    **{display_name}**\n
                     🆔 `{uid}`  
                     📌 สถานะ: {emoji} `{user_status}`  
                     🧑‍💼 Role: `{user_role}`
