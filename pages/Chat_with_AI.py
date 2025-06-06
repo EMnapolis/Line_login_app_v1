@@ -1,6 +1,6 @@
-#page/chat_with_ai.py
-from utility_chat import *   #ทุกอย่างจากไฟล์ utility.py
-
+# page/chat_with_ai.py
+from utility_chat import *  # ทุกอย่างจากไฟล์ utility.py
+from utility_ai import *
 client = OpenAI(api_key=OPENAI_API_KEY)
 # เชื่อมต่อ SQLite
 conn, cursor = init_db()
@@ -34,7 +34,7 @@ DEFAULT_FILENAME = "analysis_result"
 DEFAULT_SYSTEM_PROMPT = "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"
 
 # ========== ตั้งค่าหน้า Streamlit ==========
-CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty" #Set ตัวแปร chat_token_vl
+CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty"  # Set ตัวแปร chat_token_vl
 
 # ========== Role ==========
 role = st.session_state.get("Role", "")
@@ -56,21 +56,19 @@ if DEBUG:
 
 st.page_link("app.py", label="⬅️ กลับหน้าหลัก", icon="🏠")
 st.title("🤖 AI Chat Platform")
-#---------------
+# ---------------
 # ✅ ตรวจ login และสิทธิ์
 if "user_id" not in st.session_state or st.session_state.get("status") != "APPROVED":
     st.error("🚫 กรุณาเข้าสู่ระบบก่อนใช้งาน")
     st.stop()
-#---------------
+# ---------------
 with st.sidebar:
     st.markdown("### 📑 เมนูหลัก")
-    tab_choice = st.radio("เลือกเมนู", [
-        "💬 สนทนากับ GPT",
-        "🧠 สนทนากับ Prompt",
-        "📜 ประวัติการสนทนา",
-        "📘 วิธีการใช้งาน"
-    ])
-    #ปุ่มช่วยรีหน้าแบบต่างๆ
+    tab_choice = st.radio(
+        "เลือกเมนู",
+        ["💬 สนทนากับ GPT", "🧠 สนทนากับ Prompt", "📜 ประวัติการสนทนา", "📘 วิธีการใช้งาน"],
+    )
+    # ปุ่มช่วยรีหน้าแบบต่างๆ
     col1, col2 = st.columns(2)
 
     with col1:
@@ -87,31 +85,33 @@ with st.sidebar:
                 "last_saved_count_messages_gpt",
                 "last_saved_count_chat_all_in_one",
                 "analysis_result",
-                "show_download"
+                "show_download",
             ]:
                 st.session_state.pop(key, None)
             st.rerun()
-#---------------
+# ---------------
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
-    st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
+    st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเราะเคราะ")
 
-    uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
-
+    uploaded_file = st.file_uploader(
+        "📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"]
+    )
     if uploaded_file:
         try:
             file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
             st.session_state["file_text"] = file_content
-            st.text_area("📄 ตัวอย่างเนื้อหาไฟล์", file_content[:1000], height=200, disabled=True)
+            st.text_area(
+                "📄 ตัวอย่างเนื้อหาไฟล์", file_content[:1000], height=200, disabled=True
+            )
         except Exception as e:
-            st.error(f"❌ ไม่สามารถอ่านไฟล์ได้: {e}")
+            st.error(f"❌ ไม่สามารถานไฟล์ได้: {e}")
             st.stop()
 
     file_content = st.session_state.get("file_text", "")
     st.session_state.setdefault("chat_all_in_one", [])
 
-    # แสดงประวัติการสนทนา
     for msg in st.session_state["chat_all_in_one"]:
         st.chat_message(msg["role"]).write(msg["content"])
 
@@ -119,73 +119,69 @@ if tab_choice == "💬 สนทนากับ GPT":
         st.chat_message("user").write(prompt)
         st.session_state["chat_all_in_one"].append({"role": "user", "content": prompt})
 
-        # ✅ เงื่อนไขตรวจสอบคำสั่ง "ขอไฟล์" หรือมีคำว่า "save"
         if prompt.strip() == "ขอไฟล์" or (
             "save" in prompt.lower() and st.session_state.get("analysis_result")
         ):
-            st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์")
+            st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์")
             st.session_state["show_download"] = True
-
         else:
             try:
-                base_messages = [{"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"}]
-
+                base_messages = [
+                    {
+                        "role": "system",
+                        "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี",
+                    }
+                ]
                 if file_content:
-                    base_messages.append({"role": "user", "content": f"เนื้อหาในไฟล์ทั้งหมด:\n{file_content}"})
-
-
-                base_messages.append({"role": "user", "content": prompt})
-
+                    base_messages.append(
+                        {"role": "user", "content": f"เนื้อหาในไฟล์ทั้งหมด:\n{file_content}"}
+                    )
+                base_messages.extend(st.session_state["chat_all_in_one"])
+                # TODO model AI
                 response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=base_messages
+                    model="gpt-4o", messages=base_messages, stream=True
                 )
 
-                reply = response.choices[0].message.content
-                df_result = None
+                reply = ""
+                with st.chat_message("assistant"):
+                    stream_output = st.empty()
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            word = chunk.choices[0].delta.content
+                            reply += word
+                            stream_output.markdown(reply + "▌")
+                    stream_output.markdown(reply)
 
-                # 🔍 ตรวจสอบว่าผลลัพธ์เป็น markdown table หรือ CSV-like หรือไม่
-                try:
-                    if "|" in reply and "---" in reply:
-                        lines = [line for line in reply.splitlines() if "|" in line and not line.strip().startswith("---")]
-                        cleaned = "\n".join(lines)
-                        df_result = pd.read_csv(StringIO(cleaned), sep="|").dropna(axis=1, how="all")
-                    elif "," in reply:
-                        df_result = pd.read_csv(StringIO(reply))
-                except Exception:
-                    df_result = None
-
-                # ✅ บันทึกผลลัพธ์
-                if df_result is not None:
-                    st.session_state["analysis_result_table"] = [df_result.columns.tolist()] + df_result.values.tolist()
-                else:
-                    st.session_state["analysis_result_table"] = None
-
-                usage = response.usage
-                raw_json = json.dumps(response.model_dump(), ensure_ascii=False)
-
-                st.chat_message("assistant").write(reply)
-                st.session_state["chat_all_in_one"].append({
-                    "role": "assistant", "content": reply
-                })
+                st.session_state["chat_all_in_one"].append(
+                    {"role": "assistant", "content": reply}
+                )
                 st.session_state["analysis_result"] = reply
                 st.session_state["show_download"] = False
 
-                # 🔐 บันทึกประวัติ
-                st.session_state["messages_gpt"] = base_messages + [{
-                    "role": "assistant",
-                    "content": reply,
-                    "prompt_tokens": usage.prompt_tokens,
-                    "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens,
-                    "response_json": raw_json
-                }]
+                # นับ token เพื่อบันทึก (stream=True)
+                prompt_tokens = sum(count_tokens(m["content"]) for m in base_messages)
+                completion_tokens = count_tokens(reply)
+                total_tokens = prompt_tokens + completion_tokens
+
+                st.session_state["messages_gpt"] = base_messages + [
+                    {
+                        "role": "assistant",
+                        "content": reply,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": total_tokens,
+                        "response_json": "{}",
+                    }  # stream ไม่ได้ไบบ JSON
+                ]
 
                 save_conversation_if_ready(
-                    conn, cursor, "messages_gpt", source="chat_gpt",
-                    prompt_tokens=usage.prompt_tokens,
-                    completion_tokens=usage.completion_tokens,
-                    total_tokens=usage.total_tokens
+                    conn,
+                    cursor,
+                    messages_key="messages_gpt",
+                    source="chat_gpt",
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
                 )
 
             except Exception as e:
@@ -197,10 +193,7 @@ if tab_choice == "💬 สนทนากับ GPT":
 elif tab_choice == "🧠 สนทนากับ Prompt":
     st.subheader("🧠 สนทนากับ Prompt")
 
-    tab_chat, tab_manage = st.tabs([
-        "💬 Prompt สำหรับแชททั่วไป",
-        "✍️ บันทึก / จัดการ Prompt"
-    ])
+    tab_chat, tab_manage = st.tabs(["💬 Prompt สำหรับแชททั่วไป", "✍️ บันทึก / จัดการ Prompt"])
     # ===== TAB 1: 💬 Prompt สำหรับแชททั่วไป =====
     with tab_chat:
         st.caption("ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย ฯลฯ")
@@ -209,7 +202,9 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
         prompt_dict = {name: content for name, content in prompts}
 
         if prompt_dict:
-            selected_prompt_name = st.selectbox("เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector")
+            selected_prompt_name = st.selectbox(
+                "เลือก Prompt", list(prompt_dict.keys()), key="prompt_selector"
+            )
             selected_prompt = prompt_dict[selected_prompt_name]
 
             with st.expander("ข้อความ Prompt ที่เลือก"):
@@ -219,99 +214,141 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-            uploaded_file = st.file_uploader("อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
+            uploaded_file = st.file_uploader(
+                "อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt",
+                type=["txt", "csv", "xlsx"],
+            )
             if uploaded_file:
                 file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
                 st.session_state["file_content"] = file_content
                 st.session_state["analysis_results"] = []
                 st.session_state["uploaded_filename"] = uploaded_file.name
                 st.caption(f"ใช้ไฟล์: {uploaded_file.name}")
-                st.text_area("แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True)
+                st.text_area(
+                    "แสดงเนื้อหาไฟล์", file_content[:3000], height=200, disabled=True
+                )
 
             if st.button("🔍 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก"):
                 try:
                     file_content = st.session_state.get("file_content", "")
-                    full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"  # ❗ ไม่ truncate แล้ว
+                    full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"
 
                     from utility_chat import call_openai_with_parsing
+
                     reply, df_result, usage, raw_json = call_openai_with_parsing(
                         full_input,
-                        system_prompt="คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์"
+                        system_prompt="คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์",
                     )
 
                     if df_result is not None:
-                        st.session_state["analysis_result_table"] = [df_result.columns.tolist()] + df_result.values.tolist()
+                        st.session_state["analysis_result_table"] = [
+                            df_result.columns.tolist()
+                        ] + df_result.values.tolist()
                     else:
                         st.session_state["analysis_result_table"] = None
 
                     st.chat_message("assistant").write(reply)
-                    st.session_state["chat_all_in_one"].append({"role": "assistant", "content": reply})
+                    st.session_state["chat_all_in_one"].append(
+                        {"role": "assistant", "content": reply}
+                    )
                     st.session_state["analysis_result"] = reply
                     st.session_state["show_download"] = False
 
+                    total_tokens = count_tokens(full_input + reply)
+                    prompt_tokens = count_tokens(full_input)
+                    completion_tokens = count_tokens(reply)
+
                     st.session_state["messages_gpt"] = [
-                        {"role": "system", "content": "คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์"},
+                        {
+                            "role": "system",
+                            "content": "คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ ฯลฯ โดยใช้เนื้อหาจากไฟล์",
+                        },
                         {"role": "user", "content": full_input},
                         {
-                            "role": "assistant", "content": reply,
-                            "prompt_tokens": usage.prompt_tokens,
-                            "completion_tokens": usage.completion_tokens,
-                            "total_tokens": usage.total_tokens,
-                            "response_json": raw_json
-                        }
+                            "role": "assistant",
+                            "content": reply,
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "total_tokens": total_tokens,
+                            "response_json": raw_json,
+                        },
                     ]
                     save_conversation_if_ready(
-                        conn, cursor, "messages_gpt", "chat_gpt",
-                        prompt_tokens=usage.prompt_tokens,
-                        completion_tokens=usage.completion_tokens,
-                        total_tokens=usage.total_tokens
+                        conn,
+                        cursor,
+                        "messages_gpt",
+                        "chat_gpt",
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
                     )
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาด: {e}")
 
             if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
-                st.session_state["chat_all_in_one"].append({"role": "user", "content": prompt})
+                st.session_state["chat_all_in_one"].append(
+                    {"role": "user", "content": prompt}
+                )
 
-                if prompt.strip() == "ขอไฟล์" or ("save" in prompt.lower() and st.session_state.get("analysis_result")):
-                    st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์")
+                if prompt.strip() == "ขอไฟล์" or (
+                    "save" in prompt.lower() and st.session_state.get("analysis_result")
+                ):
+                    st.chat_message("assistant").write(
+                        "📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์"
+                    )
                     st.session_state["show_download"] = True
                 else:
                     try:
                         file_content = st.session_state.get("file_content", "")
-                        full_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{file_content}"  # ❗ ไม่ truncate แล้ว
+                        full_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{file_content}"
 
                         reply, df_result, usage, raw_json = call_openai_with_parsing(
                             full_input,
-                            system_prompt="คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"
+                            system_prompt="คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี",
                         )
 
                         if df_result is not None:
-                            st.session_state["analysis_result_table"] = [df_result.columns.tolist()] + df_result.values.tolist()
+                            st.session_state["analysis_result_table"] = [
+                                df_result.columns.tolist()
+                            ] + df_result.values.tolist()
                         else:
                             st.session_state["analysis_result_table"] = None
 
                         st.chat_message("assistant").write(reply)
-                        st.session_state["chat_all_in_one"].append({"role": "assistant", "content": reply})
+                        st.session_state["chat_all_in_one"].append(
+                            {"role": "assistant", "content": reply}
+                        )
                         st.session_state["analysis_result"] = reply
                         st.session_state["show_download"] = False
 
+                        total_tokens = count_tokens(full_input + reply)
+                        prompt_tokens = count_tokens(full_input)
+                        completion_tokens = count_tokens(reply)
+
                         st.session_state["messages_gpt"] = [
-                            {"role": "system", "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี"},
+                            {
+                                "role": "system",
+                                "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี",
+                            },
                             {"role": "user", "content": full_input},
                             {
-                                "role": "assistant", "content": reply,
-                                "prompt_tokens": usage.prompt_tokens,
-                                "completion_tokens": usage.completion_tokens,
-                                "total_tokens": usage.total_tokens,
-                                "response_json": raw_json
-                            }
+                                "role": "assistant",
+                                "content": reply,
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                                "total_tokens": total_tokens,
+                                "response_json": raw_json,
+                            },
                         ]
                         save_conversation_if_ready(
-                            conn, cursor, "messages_gpt", "chat_gpt",
-                            prompt_tokens=usage.prompt_tokens,
-                            completion_tokens=usage.completion_tokens,
-                            total_tokens=usage.total_tokens
+                            conn,
+                            cursor,
+                            "messages_gpt",
+                            "chat_gpt",
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                            total_tokens=total_tokens,
                         )
                     except Exception as e:
                         st.error(f"Error: {e}")
@@ -325,8 +362,12 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
         st.caption("✍️ เพิ่ม ลบ หรือแก้ไข Prompt ที่ใช้ในระบบ")
 
         # ===== เพิ่ม Prompt ใหม่ =====
-        prompt_name = st.text_input("📝 ตั้งชื่อ Prompt ใหม่", key="prompt_name_input_create")
-        content = st.text_area("📄 เนื้อหา Prompt", height=120, key="content_input_create")
+        prompt_name = st.text_input(
+            "📝 ตั้งชื่อ Prompt ใหม่", key="prompt_name_input_create"
+        )
+        content = st.text_area(
+            "📄 เนื้อหา Prompt", height=120, key="content_input_create"
+        )
         if st.button("💾 บันทึก Prompt", key="save_prompt_create"):
             if prompt_name and content:
                 save_prompt(prompt_name, content)
@@ -341,7 +382,12 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             st.markdown("### 🗂 รายการ Prompt ที่มี")
             for name, content in prompts:
                 with st.expander(f"📌 {name}", expanded=False):
-                    edited_content = st.text_area("🔧 แก้ไขเนื้อหา Prompt", value=content, height=150, key=f"edit_{name}")
+                    edited_content = st.text_area(
+                        "🔧 แก้ไขเนื้อหา Prompt",
+                        value=content,
+                        height=150,
+                        key=f"edit_{name}",
+                    )
 
                     col1, col2 = st.columns([1, 1])
                     with col1:
@@ -357,11 +403,11 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             st.rerun()  # ✅ เช่นกัน
         else:
             st.info("ℹ️ ยังไม่มี Prompt ในระบบ")
-               
+
 # ========== Choice 3: History ==========
 elif tab_choice == "📜 ประวัติการสนทนา":
     st.subheader("📜 ประวัติการสนทนา")
-#=========== หน้ากรอก user id   ===========
+    # =========== หน้ากรอก user id   ===========
     user_id = st.session_state.get("user_id")
     role = st.session_state.get("Role", "").lower()
 
@@ -371,33 +417,42 @@ elif tab_choice == "📜 ประวัติการสนทนา":
         convs = list_conversations(user_id)
     if "messages_history" not in st.session_state:
         st.session_state["messages_history"] = []
-#=========== หน้ากรอก user id   ===========
+    # =========== หน้ากรอก user id   ===========
     label_map = {
         f"{name} ({created_at})": conv_id
-        for conv_id, user_id, name, source, prompt_tokens, completion_tokens, total_tokens, created_at in convs}
+        for conv_id, user_id, name, source, prompt_tokens, completion_tokens, total_tokens, created_at in convs
+    }
     selected = st.selectbox("📁 เลือกบทสนทนา", ["- เลือก -"] + list(label_map.keys()))
 
     if selected != "- เลือก -":
         conv_id = label_map[selected]
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT role, content, prompt_tokens, completion_tokens, total_tokens
             FROM messages
             WHERE conversation_id = ?
             ORDER BY id
-        """, (conv_id,))
+        """,
+            (conv_id,),
+        )
 
         rows = cursor.fetchall()
         messages = []
         for r, c, p, comp, total in rows:
-            messages.append({
-                "role": r,
-                "content": c,
-                "prompt_tokens": p,
-                "completion_tokens": comp,
-                "total_tokens": total
-            })
-            
-        if not st.session_state["messages_history"] or st.session_state.get("conv_id") != conv_id:
+            messages.append(
+                {
+                    "role": r,
+                    "content": c,
+                    "prompt_tokens": p,
+                    "completion_tokens": comp,
+                    "total_tokens": total,
+                }
+            )
+
+        if (
+            not st.session_state["messages_history"]
+            or st.session_state.get("conv_id") != conv_id
+        ):
             st.session_state["messages_history"] = messages
             st.session_state["conv_id"] = conv_id
 
@@ -405,16 +460,21 @@ elif tab_choice == "📜 ประวัติการสนทนา":
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 if msg["role"] == "assistant" and msg.get("total_tokens"):
-                    st.caption(f"🔢 Tokens: total={msg['total_tokens']}, prompt={msg['prompt_tokens']}, completion={msg['completion_tokens']}")
+                    st.caption(
+                        f"🔢 Tokens: total={msg['total_tokens']}, prompt={msg['prompt_tokens']}, completion={msg['completion_tokens']}"
+                    )
 
-        if prompt := st.chat_input("💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"):
+        if prompt := st.chat_input(
+            "💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"
+        ):
             st.chat_message("user").write(prompt)
-            st.session_state["messages_history"].append({"role": "user", "content": prompt})
+            st.session_state["messages_history"].append(
+                {"role": "user", "content": prompt}
+            )
 
             try:
                 response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=st.session_state["messages_history"]
+                    model="gpt-4o", messages=st.session_state["messages_history"]
                 )
                 reply = response.choices[0].message.content
                 total_tokens = response.usage.total_tokens
@@ -422,31 +482,33 @@ elif tab_choice == "📜 ประวัติการสนทนา":
                 reply = f"❌ Error: {e}"
 
             st.chat_message("assistant").write(reply)
-            st.session_state["messages_history"].append({"role": "assistant", "content": reply})
+            st.session_state["messages_history"].append(
+                {"role": "assistant", "content": reply}
+            )
             # ✅ Auto-save conversation
             save_conversation_if_ready(conn, cursor, "messages_history", "chat_history")
-            
+
         with st.expander("🗑️ ลบบทสนทนานี้"):
             if st.button("ยืนยันการลบ", key="confirm_delete_conv"):
-                cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
+                cursor.execute(
+                    "DELETE FROM messages WHERE conversation_id = ?", (conv_id,)
+                )
                 cursor.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
                 conn.commit()
                 st.session_state["messages_history"] = []
                 st.success("✅ ลบบทสนทนาเรียบร้อยแล้ว")
                 st.stop()
-                
+
         # ✅ ปุ่มดาวน์โหลดบทสนทนาเป็นไฟล์
         if st.session_state.get("messages_history"):
             with st.expander("📥 ดาวน์โหลดบทสนทนาเป็นไฟล์"):
                 file_format = st.selectbox(
                     "📄 เลือกรูปแบบไฟล์",
                     ["txt", "md", "json", "csv"],
-                    key="history_download_format"
+                    key="history_download_format",
                 )
                 file_name = st.text_input(
-                    "📝 ตั้งชื่อไฟล์",
-                    value="chat_history",
-                    key="history_download_filename"
+                    "📝 ตั้งชื่อไฟล์", value="chat_history", key="history_download_filename"
                 )
 
                 full_filename = f"{file_name.strip()}.{file_format}"
@@ -490,17 +552,20 @@ elif tab_choice == "📜 ประวัติการสนทนา":
                     label="⬇️ ดาวน์โหลดไฟล์",
                     data=file_bytes.getvalue(),
                     file_name=full_filename,
-                    mime=mime_type
+                    mime=mime_type,
                 )
 
 # ========== Choice 4 : วิธีการใช้งาน ==========
 if tab_choice == "📘 วิธีการใช้งาน":
     st.subheader("📘 วิธีการใช้งานโปรแกรม")
-    tab_intro, tab_howto, tab_tip = st.tabs(["🧩 คุณสมบัติของโปรแกรม", "💡 วิธีใช้งาน Chatai","💡 เคล็ดลับเพิ่มเติม"])
+    tab_intro, tab_howto, tab_tip = st.tabs(
+        ["🧩 คุณสมบัติของโปรแกรม", "💡 วิธีใช้งาน Chatai", "💡 เคล็ดลับเพิ่มเติม"]
+    )
 
     with tab_intro:
         st.subheader("🧩 คุณสมบัติของโปรแกรม")
-        st.markdown("""
+        st.markdown(
+            """
         ระบบนี้ถูกออกแบบมาให้สามารถสนทนากับ AI ได้หลากหลายรูปแบบ ไม่ว่าจะเป็นการถามตอบทั่วไป การวิเคราะห์จากไฟล์ หรือการใช้ Prompt เฉพาะทาง พร้อมทั้งบันทึกและจัดการประวัติการสนทนาได้
 
         ### 🧱 โครงสร้างไฟล์หลักของโปรแกรม
@@ -523,11 +588,13 @@ if tab_choice == "📘 วิธีการใช้งาน":
         ✅ สร้างและจัดการ Prompt สำหรับคำถามเฉพาะ
         ✅ บันทึก และแชทต่อจากประวัติเดิมได้
         ✅ รองรับการใช้งานร่วมกับ LIFF หรือระบบอื่นในอนาคต
-        """)
+        """
+        )
 
     with tab_howto:
         st.subheader("📝 วิธีใช้งานแต่ละเมนู")
-        st.markdown("""
+        st.markdown(
+            """
         Chatai ถูกออกแบบให้ใช้งานง่ายผ่าน 4 เมนูหลักทางด้านซ้ายของหน้าจอ โดยสามารถทำงานร่วมกับ GPT-3.5/4 และเอกสารต่าง ๆ ได้ทันที
 
         ### 1️⃣  💬 สนทนากับ GPT
@@ -550,9 +617,11 @@ if tab_choice == "📘 วิธีการใช้งาน":
         - **มีปุ่มลบประวัติ** สำหรับบทสนทนาที่ไม่ต้องการเก็บไว้
         ---
         💡 **แนะนำ:** ทุกการใช้งานสามารถใช้ได้ฟรีผ่าน GPT-3.5 หรือเปลี่ยนเป็น GPT-4 (ถ้ามี API Key ที่รองรับ)
-        """)
+        """
+        )
         with tab_tip:
-            st.markdown("""
+            st.markdown(
+                """
         ## 💡 เคล็ดลับการใช้งานอย่างมีประสิทธิภาพ
         ---
         ### 🧠 สร้าง Prompt แบบเฉพาะทาง
@@ -586,12 +655,16 @@ if tab_choice == "📘 วิธีการใช้งาน":
         - สามารถดูย้อนหลังได้ในเมนู **📜 ประวัติการสนทนา**
         - แชทต่อจากเดิม หรืออัปเดตบทสนทนาเก่าได้
         ---
-        """)
-            
+        """
+            )
+
 # Footer ด้านล่างสุด
-st.markdown("""
+st.markdown(
+    """
     <hr style='margin-top: 3rem;'>
     <div style='text-align: center; color: gray;'>
         Provide ระบบสำหรับ วิลล่า มาร์เก็ตเจพี โดยยูนิคอร์น เทค อินทริเกรชั่น
     </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

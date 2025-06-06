@@ -1,4 +1,4 @@
-#utility.py
+# utility.py
 import streamlit as st
 import os
 import sqlite3
@@ -21,14 +21,15 @@ import tiktoken
 import json
 import time
 import math
-#==== import libary ====
+import requests
+# ==== import libary ====
 
-#==== global path ====
+# ==== global path ====
 db_folder = os.path.join("data")
 db_path = os.path.join("data", "sqdata.db")
 schema_path = os.path.join("data", "schema.sql")
 user_id = st.session_state.get("user_id")
-#==== global path ====
+# ==== global path ====
 
 # ✅ โหลดจาก config.py แทนการใช้ os.getenv() เอง
 from config import OPENAI_API_KEY,CHAT_TOKEN
@@ -56,7 +57,7 @@ def initialize_schema(conn, schema_path=schema_path):
     """
     if not os.path.exists(schema_path):
         raise FileNotFoundError(f"❌ ไม่พบไฟล์ schema: {schema_path}")
-    
+
     with open(schema_path, "r", encoding="utf-8") as f:
         sql_script = f.read().strip()
 
@@ -71,92 +72,88 @@ def initialize_schema(conn, schema_path=schema_path):
         conn.rollback()
         raise RuntimeError(f"❌ เกิดข้อผิดพลาดระหว่างสร้าง schema: {e}")
 
+
 # ===== บันทึกบทสนทนาลงฐานข้อมูล =====
-def save_conversation_if_ready(conn, cursor, messages_key, source="chat_gpt", **token_usage):
+def save_conversation_if_ready(
+    conn, cursor, messages_key, source="chat_gpt", **token_usage
+):
     messages = st.session_state.get(messages_key, [])
     conv_key = f"conversation_id_{messages_key}"
     last_key = f"last_saved_count_{messages_key}"
 
     conv_id = st.session_state.get(conv_key)
     last_saved_count = st.session_state.get(last_key, 0)
+    user_id = st.session_state.get("user_id", "guest")
 
+    # ⏺️ ถ้ามีข้อความใหม่
     if len(messages) >= 2 and len(messages) > last_saved_count:
         last_two = messages[-2:]
         if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
 
+            # 🧠 สร้างหัวข้อสนทนาใหม่ หากยังไม่มี conv_id
             if conv_id is None:
                 title = generate_title_from_conversation(messages)
-                cursor.execute("""
-                    INSERT INTO conversations (user_id, title, source, 
-                        prompt_tokens, completion_tokens, total_tokens)
+                cursor.execute(
+                    """
+                    INSERT INTO conversations (
+                        user_id, title, source,
+                        prompt_tokens, completion_tokens, total_tokens
+                    )
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    st.session_state["user_id"],
-                    title,
-                    source,
-                    token_usage.get("prompt_tokens"),
-                    token_usage.get("completion_tokens"),
-                    token_usage.get("total_tokens")
-                ))
+                """,
+                    (
+                        user_id,
+                        title,
+                        source,
+                        token_usage.get("prompt_tokens", 0),
+                        token_usage.get("completion_tokens", 0),
+                        token_usage.get("total_tokens", 0),
+                    ),
+                )
                 conv_id = cursor.lastrowid
                 st.session_state[conv_key] = conv_id
 
+            # 🔁 บันทึกข้อความใหม่ลง messages
             for msg in messages[last_saved_count:]:
-                cursor.execute("""
+                # ตั้งค่า token usage เป็น 0 หากไม่มีใน message
+                msg_prompt_tokens = msg.get("prompt_tokens", 0)
+                msg_completion_tokens = msg.get("completion_tokens", 0)
+                msg_total_tokens = msg.get("total_tokens", 0)
+
+                cursor.execute(
+                    """
                     INSERT INTO messages (
                         user_id, conversation_id, role, content,
                         prompt_tokens, completion_tokens, total_tokens
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    st.session_state["user_id"],
-                    conv_id,
-                    msg.get("role", "user"),
-                    msg.get("content", ""),
-                    msg.get("prompt_tokens"),
-                    msg.get("completion_tokens"),
-                    msg.get("total_tokens"),
-                ))
+                """,
+                    (
+                        user_id,
+                        conv_id,
+                        msg.get("role", "user"),
+                        msg.get("content", ""),
+                        msg_prompt_tokens,
+                        msg_completion_tokens,
+                        msg_total_tokens,
+                    ),
+                )
+
                 message_id = cursor.lastrowid
 
-                # ✅ แก้ตรงนี้ให้เก็บ conversation_id กับ message_id ให้ถูก
+                # ถ้ามี response_json ให้บันทึกลง raw_json
                 if "response_json" in msg:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO raw_json (conversation_id, message_id, response_json)
                         VALUES (?, ?, ?)
-                    """, (
-                        conv_id,
-                        message_id,
-                        msg["response_json"]
-                    ))
+                    """,
+                        (conv_id, message_id, msg["response_json"]),
+                    )
 
             conn.commit()
             st.session_state[last_key] = len(messages)
             st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}")
-def send_prompt_to_gpt(prompt_text, message_key, model="gpt-4o"):
-    messages = st.session_state.get(message_key, [])
-    messages.append({"role": "user", "content": prompt_text})
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages
-    )
-
-    reply = response.choices[0].message.content
-    usage = response.usage
-
-    messages.append({
-        "role": "assistant",
-        "content": reply,
-        "prompt_tokens": usage.prompt_tokens,
-        "completion_tokens": usage.completion_tokens,
-        "total_tokens": usage.total_tokens
-    })
-
-    # บันทึกผลกลับเข้า session
-    st.session_state[message_key] = messages
-
-    return reply, usage
 
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
 def generate_title_from_conversation(messages):
