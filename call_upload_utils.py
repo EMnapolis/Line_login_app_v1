@@ -79,27 +79,16 @@ def fetch_json(tmp_token, from_date, to_date):
     except Exception:
         raise Exception(f"Invalid JSON returned! Status: {response.status_code}, Text: {response.text[:300]}")
 
-# def load_sent_rec_ids():
-#     if os.path.exists(SENT_FILE):
-#         df = pd.read_csv(SENT_FILE)
-#         if "recId" in df.columns:
-#             return df["recId"].astype(str).tolist()
-#         else:
-#             return df.iloc[:, 0].astype(str).tolist()  # fallback ใช้คอลัมน์แรก
-#     return []
 def load_sent_rec_ids_db():
     with get_connection() as conn:
         cursor = conn.execute("SELECT recId FROM sent_records")
         return [row[0] for row in cursor.fetchall()]
 
-# def save_sent_rec_id(rec_id):
-#     with open(SENT_FILE, "a") as f:
-#         f.write(f"{rec_id}\n")
-def save_sent_rec_id_db(rec_id):
+def save_sent_rec_id_db(rec_id, msg):
     with get_connection() as conn:
         conn.execute("""
-            INSERT OR IGNORE INTO sent_records (recId) VALUES (?)
-        """, (rec_id,))     
+            INSERT OR IGNORE INTO sent_records (recId, msg) VALUES (?, ?)
+        """, (rec_id, msg))
 
 def log_failed(rec_id, error):
     with open(FAILED_FILE, "a") as f:
@@ -232,7 +221,7 @@ def process_records(df, tmp_token, chat_token, contact_id):
             row["fileUrl"] = file_url
             row["room_id"] = room_id
             output_rows.append(row)
-            save_sent_rec_id_db(rec_id)
+            save_sent_rec_id_db(rec_id,message)
 
         except Exception as e:
             log_failed(rec_id, str(e))

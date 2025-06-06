@@ -78,5 +78,6 @@ CREATE TABLE IF NOT EXISTS raw_json (
 -- เพื่อป้องกันการส่งซ้ำ
 -- ===========================================
 CREATE TABLE IF NOT EXISTS sent_records (
-    recId TEXT PRIMARY KEY                                   -- รหัสข้อมูลที่เคยถูกส่งออกแล้ว
+    recId TEXT PRIMARY KEY,                                   -- รหัสข้อมูลที่เคยถูกส่งออกแล้ว
+    msg TEXT
 );
