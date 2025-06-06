@@ -97,18 +97,18 @@ if menu == "หน้าคำสั่งทำงาน":
                                    value = CHAT_TOKEN_VL,type="password",
                                    help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    col1, col2, col3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
-    with col1:
+    chat_tk1, chat_tk2, chat_tk3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
+    with chat_tk1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
-        if st.button("🔁 **เริ่มใหม่**"):
+        if st.button("🔁 **เริ่มใหม่**", disabled=st.session_state.get("is_processing", False)):
             for key in ["ready_to_process", "processed", "df_new"
                     , "processed_df","full_df", "selected_ids"]:
                 st.session_state.pop(key, None)
                 
             st.rerun()
-    with col2:
+    with chat_tk2:
         mode = st.radio("**เลือกโหมดการทำงาน**", ["ดึงข้อมูลจากวันที่"])
-    with col3:
+    with chat_tk3:
         st.markdown("""
     1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  
     2️⃣ กดปุ่ม 📥 **ดึงข้อมูล JSON จาก 3CX**  
@@ -120,83 +120,105 @@ if menu == "หน้าคำสั่งทำงาน":
         # ให้ผู้ใช้เลือกวันที่เริ่มต้น และวันที่สิ้นสุด
         before_date = date.today() - timedelta(days=1)
         default_date = date.today()
-        col1, col2 = st.columns(2)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
-        with col1:
+        mode_col1, mode_col2,mode_col3 = st.columns(3)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
+        with mode_col1:
             from_date = st.date_input("From Date", value=before_date) # วันที่เริ่มต้น
-        with col2:
+        with mode_col2:
             to_date = st.date_input("To Date", value=default_date)  # วันที่สิ้นสุด
-
-        # getjson1, getjson2 = st.columns(2)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
-        # with getjson1:
-        # ปุ่มสั่งดึงข้อมูล JSON จาก 3CX
-        if st.button("📥 ดึงข้อมูล JSON จาก 3CX"):
-            if not tmp_token or not chat_token:
-                st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
-            else:
-                with st.spinner("กำลังดึงข้อมูล JSON จาก 3CX..."):
-                    json_data = fetch_json(tmp_token, from_date, to_date)
-                    df = pd.json_normalize(json_data.get("value", []))
-
-                if df.empty:
-                    st.warning("ไม่มีข้อมูลจาก 3CX API ในช่วงเวลาที่เลือก")
+        with mode_col3:
+            st.markdown("""
+                            <div style="display: flex; flex-direction: column; align-items: left; justify-content: left; height: 100%;">
+                                <span style="font-size: 14px; margin-bottom: 5px;">ปุ่มคำสั่ง</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+            # ปุ่มสั่งดึงข้อมูล JSON จาก 3CX
+            if st.button("📥 ดึงข้อมูล JSON จาก 3CX", disabled=st.session_state.get("is_processing", False)):
+                
+                if not tmp_token or not chat_token:
+                    st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
                 else:
-                    df["Id"] = df["Id"].astype(str)
-                    sent_ids = load_sent_rec_ids_db()
-                    df["already_sent"] = df["Id"].isin(sent_ids)
+                    with st.spinner("กำลังดึงข้อมูล JSON จาก 3CX..."):
+                        json_data = fetch_json(tmp_token, from_date, to_date)
+                        df = pd.json_normalize(json_data.get("value", []))
 
-                    # 🕑 แปลงเวลา และสร้างข้อความ preview
-                    def build_message(row):
-                        try:
-                            rec_id = row["Id"]
-                            start_time_utc = datetime.strptime(row["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
-                            local_time = start_time_utc + timedelta(hours=7)
-                            start_time_str = local_time.strftime("%Y-%m-%d %H:%M:%S")
+                    if df.empty:
+                        st.warning("ไม่มีข้อมูลจาก 3CX API ในช่วงเวลาที่เลือก")
+                    else:
+                        df["Id"] = df["Id"].astype(str)
+                        sent_ids = load_sent_rec_ids_db()
+                        df["already_sent"] = df["Id"].isin(sent_ids)
 
-                            from_num = row["FromCallerNumber"].replace("Ext.", "")
-                            to_num = row["ToCallerNumber"]
-                            from_display = row["FromDisplayName"]
-                            to_display = row["ToDisplayName"]
-                            call_type = row["CallType"]
+                        # 🕑 แปลงเวลา และสร้างข้อความ preview
+                        def build_message(row):
+                            try:
+                                rec_id = row["Id"]
+                                start_time_utc = datetime.strptime(row["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
+                                local_time = start_time_utc + timedelta(hours=7)
+                                start_time_str = local_time.strftime("%Y-%m-%d %H:%M:%S")
 
-                            if call_type == "InboundExternal":
-                                from_display_clean = from_display.split(":")[-1] if ":" in from_display else from_display
-                                return f"From_{from_num}_{from_display_clean}_To_{to_num}_{to_display}_เมื่อ_{start_time_str}"
-                            else:
-                                to_display_clean = "" if to_num == to_display else to_display
-                                msg = f"From_{from_num}_{from_display}_To_{to_num}"
-                                if to_display_clean:
-                                    msg += f"_{to_display_clean}"
-                                return f"{msg}_เมื่อ_{start_time_str}"
-                        except:
-                            return "❌ สร้างข้อความไม่สำเร็จ"
+                                from_num = row["FromCallerNumber"].replace("Ext.", "")
+                                to_num = row["ToCallerNumber"]
+                                from_display = row["FromDisplayName"]
+                                to_display = row["ToDisplayName"]
+                                call_type = row["CallType"]
 
-                    df["preview_message"] = df.apply(build_message, axis=1)
+                                if call_type == "InboundExternal":
+                                    from_display_clean = from_display.split(":")[-1] if ":" in from_display else from_display
+                                    return f"From_{from_num}_{from_display_clean}_To_{to_num}_{to_display}_เมื่อ_{start_time_str}"
+                                else:
+                                    to_display_clean = "" if to_num == to_display else to_display
+                                    msg = f"From_{from_num}_{from_display}_To_{to_num}"
+                                    if to_display_clean:
+                                        msg += f"_{to_display_clean}"
+                                    return f"{msg}_เมื่อ_{start_time_str}"
+                            except:
+                                return "❌ สร้างข้อความไม่สำเร็จ"
 
-                    st.session_state["full_df"] = df
-                    st.session_state["selected_ids"] = []  # Reset selection
+                        df["preview_message"] = df.apply(build_message, axis=1)
+
+                        st.session_state["full_df"] = df
+                        st.session_state["selected_ids"] = []  # Reset selection
                
     if "full_df" in st.session_state:
         df = st.session_state["full_df"]
-        ROWS_PER_PAGE = 20
-        total_rows = len(df)
-        total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
-        page = st.number_input("เลือกหน้า", min_value=1, max_value=total_pages, value=1, step=1)
+        search1, search2, search3 = st.columns([1, 1, 1])
+        with search1:
+            search_text = st.text_input("🔎 ค้นหา rec_id หรือข้อความสรุปสาย", value="")
+        with search2:
+            call_type_filter = st.selectbox("📞 ประเภทสาย", options=["ทั้งหมด", "InboundExternal", "OutboundExternal"])
+        with search3:
+            filtered_df = df.copy()
 
-        start_idx = (page - 1) * ROWS_PER_PAGE
-        end_idx = start_idx + ROWS_PER_PAGE
-        paginated_df = df.iloc[start_idx:end_idx]
+            if search_text:
+                search_lower = search_text.lower()
+                filtered_df = filtered_df[
+                    filtered_df["Id"].str.lower().str.contains(search_lower) |
+                    filtered_df["preview_message"].str.lower().str.contains(search_lower)
+                ]
+            if call_type_filter != "ทั้งหมด":
+                filtered_df = filtered_df[filtered_df["CallType"] == call_type_filter]
+
+            ROWS_PER_PAGE = 50
+            total_rows = len(filtered_df)
+            total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
+
+            page = st.number_input("เลือกหน้า", min_value=1, max_value=total_pages, value=1, step=1)
+
+            start_idx = (page - 1) * ROWS_PER_PAGE
+            end_idx = start_idx + ROWS_PER_PAGE
+            paginated_df = filtered_df.iloc[start_idx:end_idx]
 
         st.caption(f"🔢 แสดงหน้า {page} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว")
 
-        button_col1, button_col2, button_col3, button_col4 = st.columns([3, 2, 4, 1])
+        button_col1, button_col2, button_col3, button_col4 = st.columns([5, 4, 6, 6])
         with button_col1:
-            if st.button("🔘 เลือกทั้งหมด (ทุกหน้า)"):
-                st.session_state["selected_ids"] = df[~df["already_sent"]]["Id"].tolist()
+            if st.button("🔘 เลือกทั้งหมด (ทุกหน้า)", disabled=st.session_state.get("is_processing", False)):
+                st.session_state["selected_ids"] = filtered_df[~filtered_df["already_sent"]]["Id"].tolist()
         with button_col2:
-            if st.button("🔘 ยกเลิกทั้งหมด"):
+            if st.button("🔘 ยกเลิกทั้งหมด", disabled=st.session_state.get("is_processing", False)):
                 st.session_state["selected_ids"] = []
         with button_col3:
-            if st.button("🔘 เลือกเฉพาะหน้านี้"):
+            if st.button("🔘 เลือกเฉพาะหน้านี้", disabled=st.session_state.get("is_processing", False)):
                 page_ids = paginated_df[~paginated_df["already_sent"]]["Id"].tolist()
                 st.session_state["selected_ids"] = list(set(st.session_state["selected_ids"] + page_ids))
         with button_col3:
@@ -223,7 +245,9 @@ if menu == "หน้าคำสั่งทำงาน":
 
     
     # ปุ่มเริ่มประมวลผล
-    if st.button("🚀 เริ่มประมวลผลรายการใหม่"):
+    if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
+        st.session_state["is_processing"] = True
+
         if not tmp_token or not chat_token:
             st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
         elif not st.session_state.get("selected_ids"):
@@ -237,6 +261,7 @@ if menu == "หน้าคำสั่งทำงาน":
 
             st.session_state["processed"] = True
             st.session_state["processed_df"] = processed_df
+            st.session_state["is_processing"] = False
 
 
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
