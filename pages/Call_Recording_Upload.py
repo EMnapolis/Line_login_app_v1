@@ -243,18 +243,6 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.session_state["selected_ids"].append(rec_id)
                 elif not checked and rec_id in st.session_state["selected_ids"]:
                     st.session_state["selected_ids"].remove(rec_id)
-
-    
-                checked = st.checkbox(
-                    f"🆕 {rec_id}: {preview}",
-                    key=f"chk_{rec_id}",
-                    value=default_checked
-                )
-                if checked and rec_id not in st.session_state["selected_ids"]:
-                    st.session_state["selected_ids"].append(rec_id)
-                elif not checked and rec_id in st.session_state["selected_ids"]:
-                    st.session_state["selected_ids"].remove(rec_id)
-
     
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
@@ -276,16 +264,6 @@ if menu == "หน้าคำสั่งทำงาน":
             st.session_state["is_processing"] = False
 
 
-    # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
-    if st.session_state.get("processed"):
-        st.success("🎉 ประมวลผลเสร็จสิ้น")
-        if role == "super admin":
-            st.download_button(
-                label="📥 ดาวน์โหลดผลลัพธ์เป็น CSV",     # ป้ายปุ่ม
-                data=st.session_state["processed_df"].to_csv(index=False),    # แปลง DataFrame เป็น CSV
-                file_name="processed_results.csv",  # ตั้งชื่อไฟล์ดาวน์โหลด
-                mime="text/csv"                     # ระบุ MIME type สำหรับไฟล์ CSV
-            )
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
     if st.session_state.get("processed"):
         st.success("🎉 ประมวลผลเสร็จสิ้น")
