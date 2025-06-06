@@ -246,13 +246,13 @@ if menu == "หน้าคำสั่งทำงาน":
     
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
-        st.session_state["is_processing"] = True
 
         if not tmp_token or not chat_token:
             st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
         elif not st.session_state.get("selected_ids"):
             st.warning("กรุณาเลือกรายการ rec_id อย่างน้อยหนึ่งรายการ")
         else:
+            st.session_state["is_processing"] = True
             selected_df = st.session_state["full_df"]
             selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
 
