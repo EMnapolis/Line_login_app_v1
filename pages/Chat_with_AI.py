@@ -72,7 +72,7 @@ with st.sidebar:
 if tab_choice == "💬 สนทนากับ GPT":
 	model_choice = st.radio(
 		"🧠 เลือกโมเดลที่ต้องการใช้",
-		["gpt-4o", "llama2:latest"],
+		["gpt-4o", "gemma3:latest"],
 		key="model_selector",
 		horizontal=True,
 	)
@@ -127,11 +127,12 @@ if tab_choice == "💬 สนทนากับ GPT":
 		)
 
 		# คำสั่งขอไฟล์
-		if prompt.strip() == "ขอไฟล์" or (
-			"save" in prompt.lower() and st.session_state.get("analysis_result")
-		):
-			st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพธ์ที่ได้จาก AI")
-			st.session_state["show_download"] = True
+		if prompt.strip() == "ขอไฟล์":
+			if not st.session_state.get("analysis_result"):
+				st.chat_message("assistant").write("⚠️ ยังไม่มีผลลัพธ์ให้ดาวน์โหลด กรุณาถามคำถามก่อน")
+			else:
+				st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพธ์ที่ได้จาก AI")
+				st.session_state["show_download"] = True
 
 		else:
 			try:
@@ -183,7 +184,7 @@ if tab_choice == "💬 สนทนากับ GPT":
 					}
 				]
 
-				# บันทึกลง SQLite
+				#บันทึกลง SQLite
 				save_conversation_if_ready(
 					conn,
 					cursor,
@@ -193,6 +194,19 @@ if tab_choice == "💬 สนทนากับ GPT":
 					completion_tokens=result["completion_tokens"],
 					total_tokens=result["total_tokens"],
 				)
+
+				
+				if "conversation_title" not in st.session_state:
+					from utility_ai import generate_title_from_conversation
+
+					title = generate_title_from_conversation(
+						st.session_state["messages_gpt"]
+					)
+					st.session_state["conversation_title"] = title  # ใช้ใน UI
+					save_conversation_if_ready(
+						cursor, title
+					)  # ต้องสร้างฟังก์ชันนี้ให้เขียนเข้า DB
+					conn.commit()
 
 			except Exception as e:
 				st.error(f"❌ Error: {e}")
@@ -211,7 +225,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
 		model_choice = st.radio(
 			"🧠 เลือกโมเดล",
-			["gpt-4o", "llama2:latest"],
+			["gpt-4o", "gemma3:latest"],
 			horizontal=True,
 			key="model_selector_prompt",
 		)
@@ -383,6 +397,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 			if prompt_name and content:
 				save_prompt(prompt_name, content)
 				st.success(f"✅ บันทึก Prompt “{prompt_name}” เรียบร้อยแล้ว")
+				st.toast("✅ ดำเนินการเสร็จสิ้น", icon="✅")
 				st.rerun()
 			else:
 				st.warning("⚠️ กรุณากรอกชื่อและเนื้อหา Prompt")
@@ -423,12 +438,24 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 	role = st.session_state.get("Role", "").lower()
 
 	if role in ["admin", "super admin"]:
-		convs = list_conversations()
+		convs_all = list_conversations()
 	else:
-		convs = list_conversations(user_id)
+		convs_all = list_conversations(user_id)
+
+	# ===== เพิ่ม filter ตามโมเดล =====
+	st.sidebar.markdown("### 🎛️ ตัวกรอง")
+	model_filter = st.sidebar.selectbox(
+		"📦 แสดงบทสนทนาที่ใช้โมเดล", ["ทั้งหมด"] + sorted(list(set(c[3] for c in convs_all)))
+	)
+
+	if model_filter != "ทั้งหมด":
+		convs = [c for c in convs_all if c[3] == model_filter]
+	else:
+		convs = convs_all
+
 	if "messages_history" not in st.session_state:
 		st.session_state["messages_history"] = []
-	# =========== หน้ากรอง user id   ===========
+
 	label_map = {
 		f"{name} [{source}] ({created_at})": conv_id
 		for conv_id, user_id, name, source, prompt_tokens, completion_tokens, total_tokens, created_at in convs
@@ -437,6 +464,23 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
 	if selected != "- เลือก -":
 		conv_id = label_map[selected]
+
+		# ===== แสดงชื่อบทสนทนาและแก้ไขชื่อ =====
+		title = selected.split(" [")[0]
+		st.markdown(f"### 🗂️ หัวข้อ: `{title}`")
+
+		new_title = st.text_input(
+			"✏️ เปลี่ยนชื่อบทสนทนา", value=title, key="rename_title_input"
+		)
+		if new_title.strip() != title:
+			cursor.execute(
+				"UPDATE conversations SET title = ? WHERE id = ?",
+				(new_title.strip(), conv_id),
+			)
+			conn.commit()
+			st.success("✅ เปลี่ยนชื่อหัวข้อเรียบร้อยแล้ว")
+			st.rerun()
+
 		cursor.execute(
 			"""
 			SELECT role, content, prompt_tokens, completion_tokens, total_tokens
@@ -458,7 +502,6 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 			for r, c, p, comp, total in rows
 		]
 
-		# --- โหลดข้อมูลเข้า session_state ถ้ายังไม่โหลด หรือ conv_id เปลี่ยน ---
 		if (
 			not st.session_state.get("messages_history")
 			or st.session_state.get("conv_id") != conv_id
@@ -466,45 +509,52 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 			st.session_state["messages_history"] = messages
 			st.session_state["conv_id"] = conv_id
 
-		# --- แสดงแชททั้งหมด ---
-		MAX_CHARS = 500
+		MAX_CHARS = 300
+		PREVIEW_CHARS = 50  # จำนวนตัวอักษรที่แสดงเป็น preview
+
 		for msg in st.session_state.get("messages_history", []):
 			role = msg.get("role", "user")
-			content = msg.get("content", "")
+			content = msg.get("content", "").strip()
 
-			if role == "user" and content.startswith("เนื้อหาในไฟล์ทั้งหมด:"):
-				with st.chat_message("user"):
-					if len(content) > MAX_CHARS:
-						with st.expander("📄 ดูเนื้อหาในไฟล์ทั้งหมด (ย่อ)"):
-							st.markdown(content)
-					else:
+			with st.chat_message(role):
+				if len(content) > MAX_CHARS:
+					preview = content[:PREVIEW_CHARS].rsplit(" ", 1)[0] + "..."  # ตัดให้จบที่คำ
+					st.markdown(preview)  # แสดง preview ด้านนอก
+
+					with st.expander("📄 ดูข้อความทั้งหมด"):
 						st.markdown(content)
-			else:
-				with st.chat_message(role):
+				else:
 					st.markdown(content)
-					if role == "assistant" and msg.get("total_tokens"):
-						st.caption(
-							f"🔢 Tokens: total={msg.get('total_tokens', 0)}, "
-							f"prompt={msg.get('prompt_tokens', 0)}, "
-							f"completion={msg.get('completion_tokens', 0)}"
-						)
+
+				if role == "assistant" and msg.get("total_tokens"):
+					st.caption(
+						f"🔢 Tokens: total={msg.get('total_tokens', 0)}, "
+						f"prompt={msg.get('prompt_tokens', 0)}, "
+						f"completion={msg.get('completion_tokens', 0)}"
+					)
 
 		model_choice = st.radio(
 			"🧐 เลือกโมเดลที่ใช้ในการต่อแชท",
-			["gpt-4o", "llama2:latest"],
+			["gpt-4o", "gemma3:latest"],
 			horizontal=True,
 			key="model_selector_history",
 		)
 
-		if prompt := st.chat_input("💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"):
+		if prompt := st.chat_input(
+			"💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"
+		):
 			st.chat_message("user").write(prompt)
-			st.session_state["messages_history"].append({"role": "user", "content": prompt})
+			st.session_state["messages_history"].append(
+				{"role": "user", "content": prompt}
+			)
 
 			try:
 				with st.chat_message("assistant"):
 					stream_output = st.empty()
 					result = stream_response_by_model(
-						model_choice, st.session_state["messages_history"], stream_output
+						model_choice,
+						st.session_state["messages_history"],
+						stream_output,
 					)
 					reply = result["reply"]
 					stream_output.markdown(reply)
@@ -541,9 +591,9 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 				cursor.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
 				conn.commit()
 
-				reset_on_button_click()       # ✅ ล้าง session_state ที่เกี่ยวข้อง
+				reset_on_button_click()
 				st.success("✅ ลบบทสนทนาเรียบร้อยแล้ว")
-				st.rerun()                    # ✅ รีโหลดหน้าใหม่ (รีเซ็ต UI)
+				st.rerun()
 
 		if st.session_state.get("messages_history"):
 			with st.expander("📅 ดาวน์โหลดบทสนทนาเป็นไฟล์"):
