@@ -15,18 +15,18 @@ def count_tokens(text, model="gpt-4o"):
         encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text))
 
-def attach_token_count(messages: list, model: str = "gpt-4o") -> list:
-    """
-    เพิ่ม field 'token_count' ให้กับทุกข้อความใน messages
-    ใช้ count_tokens สำหรับ GPT หรือ estimate_tokens สำหรับ LLaMA
-    """
-    for m in messages:
-        if "token_count" not in m and "content" in m:
-            if model.startswith("gpt-"):
-                m["token_count"] = count_tokens(m["content"], model=model)
-            else:
-                m["token_count"] = estimate_tokens(m["content"])
-    return messages
+# def attach_token_count(messages: list, model: str = "gpt-4o") -> list:
+#     """
+#     เพิ่ม field 'token_count' ให้กับทุกข้อความใน messages
+#     ใช้ count_tokens สำหรับ GPT หรือ estimate_tokens สำหรับ LLaMA
+#     """
+#     for m in messages:
+#         if "token_count" not in m and "content" in m:
+#             if model.startswith("gpt-"):
+#                 m["token_count"] = count_tokens(m["content"], model=model)
+#             else:
+#                 m["token_count"] = estimate_tokens(m["content"])
+#     return messages
 
 def estimate_tokens(text: str, model: str = None) -> int:
     words = len(text.split())

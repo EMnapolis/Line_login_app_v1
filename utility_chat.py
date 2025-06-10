@@ -87,8 +87,11 @@ def save_conversation_if_ready(
     if len(messages) >= 2 and len(messages) > last_saved_count:
         last_two = messages[-2:]
         if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
+
+            # ✅ สร้างหัวข้อและ conversation ใหม่ ถ้าไม่มี
             if conv_id is None:
                 title = generate_title_from_conversation(messages)
+
                 cursor.execute(
                     """
                     INSERT INTO conversations (
@@ -104,45 +107,38 @@ def save_conversation_if_ready(
                         token_usage.get("prompt_tokens", 0),
                         token_usage.get("completion_tokens", 0),
                         token_usage.get("total_tokens", 0),
+
                     ),
                 )
                 conv_id = cursor.lastrowid
                 st.session_state[conv_key] = conv_id
 
+            # 🔁 บันทึกเฉพาะข้อความใหม่
             for msg in messages[last_saved_count:]:
                 cursor.execute(
-                    """
-                    INSERT INTO messages (
-                        user_id, conversation_id, role, content,
-                        prompt_tokens, completion_tokens, total_tokens
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        user_id,
-                        conv_id,
-                        msg.get("role", "user"),
-                        msg.get("content", ""),
-                        msg.get("prompt_tokens", 0),
-                        msg.get("completion_tokens", 0),
-                        msg.get("total_tokens", 0),
-                    ),
-                )
-                message_id = cursor.lastrowid
-
-                if "response_json" in msg:
-                    cursor.execute(
-                        """
-                        INSERT INTO raw_json (conversation_id, message_id, response_json)
-                        VALUES (?, ?, ?)
-                        """,
-                        (conv_id, message_id, msg["response_json"]),
+						"""
+						INSERT INTO messages (
+							user_id, conversation_id, role, content,
+							prompt_tokens, completion_tokens, total_tokens,
+							response_json
+						)
+						VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+						""",
+						(
+							user_id,
+							conv_id,
+							msg.get("role", "user"),
+							msg.get("content", ""),
+							msg.get("prompt_tokens", 0),
+							msg.get("completion_tokens", 0),
+							msg.get("total_tokens", 0),
+							msg.get("response_json", "{}"),
+						),
                     )
 
             conn.commit()
             st.session_state[last_key] = len(messages)
             st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}")
-
 
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
 def generate_title_from_conversation(messages):
@@ -502,4 +498,46 @@ def show_download_section():
             mime=mime_type,
         )
 
+
 ## ============================== เกี่ยวกับไฟล์ ==============================
+
+# Reset เมื่อเปลี่ยนหน้า
+def reset_tab(tab_choice, model_choice):
+    # ตรวจจับการเปลี่ยนแท็บหรือโมเดล
+    if "tab_last" not in st.session_state:
+        st.session_state["tab_last"] = tab_choice
+    if "model_last" not in st.session_state:
+        st.session_state["model_last"] = model_choice
+
+    if (
+        st.session_state["tab_last"] != tab_choice
+        or st.session_state["model_last"] != model_choice
+    ):
+        for key in [
+            "messages_gpt",
+            "chat_all_in_one",
+            "conversation_id_messages_gpt",
+            "conversation_id_chat_all_in_one",
+            "last_saved_count_messages_gpt",
+            "last_saved_count_chat_all_in_one",
+            "analysis_result",
+            "show_download",
+            "file_text",
+        ]:
+            st.session_state.pop(key, None)
+
+        st.session_state["tab_last"] = tab_choice
+        st.session_state["model_last"] = model_choice
+        st.rerun()
+
+def reset_on_button_click():
+    # ตรวจจับการกดปุ่มแล้วรีเฟรช
+    if "last_button_pressed" not in st.session_state:
+        st.session_state["last_button_pressed"] = None
+    if (
+        "button_pressed" in st.session_state
+        and st.session_state["button_pressed"]
+        != st.session_state["last_button_pressed"]
+    ):
+        st.session_state["last_button_pressed"] = st.session_state["button_pressed"]
+        st.rerun()

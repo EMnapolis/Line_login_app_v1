@@ -65,7 +65,7 @@ if prompt := st.chat_input("พิมพ์คำถามของคุณ (�
             base_messages.extend(st.session_state["chat_all_in_one"])
 
             # เพิ่ม token ให้ข้อความก่อนส่ง
-            base_messages = attach_token_count(base_messages, model=model_choice)
+            # base_messages = attach_token_count(base_messages, model=model_choice)
 
             with st.chat_message("assistant"):
                 stream_output = st.empty()
