@@ -428,7 +428,7 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 		convs = list_conversations(user_id)
 	if "messages_history" not in st.session_state:
 		st.session_state["messages_history"] = []
-	# =========== หน้ากรอก user id   ===========
+	# =========== หน้ากรอง user id   ===========
 	label_map = {
 		f"{name} [{source}] ({created_at})": conv_id
 		for conv_id, user_id, name, source, prompt_tokens, completion_tokens, total_tokens, created_at in convs
