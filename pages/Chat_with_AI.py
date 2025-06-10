@@ -458,20 +458,36 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 			for r, c, p, comp, total in rows
 		]
 
+		# --- โหลดข้อมูลเข้า session_state ถ้ายังไม่โหลด หรือ conv_id เปลี่ยน ---
 		if (
-			not st.session_state["messages_history"]
+			not st.session_state.get("messages_history")
 			or st.session_state.get("conv_id") != conv_id
 		):
 			st.session_state["messages_history"] = messages
 			st.session_state["conv_id"] = conv_id
 
-		for msg in st.session_state["messages_history"]:
-			with st.chat_message(msg["role"]):
-				st.markdown(msg["content"])
-				if msg["role"] == "assistant" and msg.get("total_tokens"):
-					st.caption(
-						f"🔢 Tokens: total={msg['total_tokens']}, prompt={msg['prompt_tokens']}, completion={msg['completion_tokens']}"
-					)
+		# --- แสดงแชททั้งหมด ---
+		MAX_CHARS = 500
+		for msg in st.session_state.get("messages_history", []):
+			role = msg.get("role", "user")
+			content = msg.get("content", "")
+
+			if role == "user" and content.startswith("เนื้อหาในไฟล์ทั้งหมด:"):
+				with st.chat_message("user"):
+					if len(content) > MAX_CHARS:
+						with st.expander("📄 ดูเนื้อหาในไฟล์ทั้งหมด (ย่อ)"):
+							st.markdown(content)
+					else:
+						st.markdown(content)
+			else:
+				with st.chat_message(role):
+					st.markdown(content)
+					if role == "assistant" and msg.get("total_tokens"):
+						st.caption(
+							f"🔢 Tokens: total={msg.get('total_tokens', 0)}, "
+							f"prompt={msg.get('prompt_tokens', 0)}, "
+							f"completion={msg.get('completion_tokens', 0)}"
+						)
 
 		model_choice = st.radio(
 			"🧐 เลือกโมเดลที่ใช้ในการต่อแชท",

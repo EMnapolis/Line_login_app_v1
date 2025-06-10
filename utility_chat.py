@@ -84,11 +84,16 @@ def save_conversation_if_ready(
     last_saved_count = st.session_state.get(last_key, 0)
     user_id = st.session_state.get("user_id", "guest")
 
+    # ✅ กรณีเป็นการต่อบทสนทนาในหน้า History ที่มี conv_id อยู่แล้ว
+    if "conv_id" in st.session_state and conv_id is None:
+        conv_id = st.session_state["conv_id"]
+        st.session_state[conv_key] = conv_id
+
     if len(messages) >= 2 and len(messages) > last_saved_count:
         last_two = messages[-2:]
         if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
 
-            # ✅ สร้างหัวข้อและ conversation ใหม่ ถ้าไม่มี
+            # ✅ สร้างหัวข้อและ conversation ใหม่ ถ้าไม่มีอยู่แล้ว
             if conv_id is None:
                 title = generate_title_from_conversation(messages)
 
@@ -107,7 +112,6 @@ def save_conversation_if_ready(
                         token_usage.get("prompt_tokens", 0),
                         token_usage.get("completion_tokens", 0),
                         token_usage.get("total_tokens", 0),
-
                     ),
                 )
                 conv_id = cursor.lastrowid
@@ -116,25 +120,25 @@ def save_conversation_if_ready(
             # 🔁 บันทึกเฉพาะข้อความใหม่
             for msg in messages[last_saved_count:]:
                 cursor.execute(
-						"""
-						INSERT INTO messages (
-							user_id, conversation_id, role, content,
-							prompt_tokens, completion_tokens, total_tokens,
-							response_json
-						)
-						VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-						""",
-						(
-							user_id,
-							conv_id,
-							msg.get("role", "user"),
-							msg.get("content", ""),
-							msg.get("prompt_tokens", 0),
-							msg.get("completion_tokens", 0),
-							msg.get("total_tokens", 0),
-							msg.get("response_json", "{}"),
-						),
+                    """
+                    INSERT INTO messages (
+                        user_id, conversation_id, role, content,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        response_json
                     )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        conv_id,
+                        msg.get("role", "user"),
+                        msg.get("content", ""),
+                        msg.get("prompt_tokens", 0),
+                        msg.get("completion_tokens", 0),
+                        msg.get("total_tokens", 0),
+                        msg.get("response_json", "{}"),
+                    ),
+                )
 
             conn.commit()
             st.session_state[last_key] = len(messages)
