@@ -81,6 +81,7 @@ else:
 # ตรวจจับการเปลี่ยนแท็บ
 reset_tab(tab_choice, model_choice)
 reset_on_button_click()
+
 # ---------------
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
@@ -112,8 +113,6 @@ if tab_choice == "💬 สนทนากับ GPT":
 
     # ช่องพิมพ์คำถาม
     if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
-        from utility_ai import count_tokens, estimate_tokens
-
         token_fn = count_tokens if model_choice.startswith("gpt-") else estimate_tokens
 
         # เพิ่มข้อความของผู้ใช้พร้อม token_count

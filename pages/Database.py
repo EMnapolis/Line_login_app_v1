@@ -1,7 +1,13 @@
-#pages/Database.py
+# pages/Database.py
+import os
+import sqlite3
+import pandas as pd
+import streamlit as st
+import tiktoken
 from utility_chat import *
 
 DB_PATH = "data/sqdata.db"
+
 # ----------------------------
 # ⚙️ Debug Mode Configuration
 # ----------------------------
@@ -20,7 +26,8 @@ if DEBUG:
 # 🔒 ตรวจสอบสิทธิ์เฉพาะ super admin เท่านั้น
 if "role" not in st.session_state or st.session_state["role"] != "super admin":
     st.error("⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะ super admin เท่านั้น)")
-    st.stop()  # 🛑 หยุดการทำงานหน้านี้ทั้งหมด
+    st.stop()
+
 
 def count_tokens(text, model="gpt-3.5-turbo"):
     try:
@@ -29,23 +36,36 @@ def count_tokens(text, model="gpt-3.5-turbo"):
         enc = tiktoken.get_encoding("cl100k_base")  # fallback
     return len(enc.encode(text or ""))
 
+
 def fetch_table(table_name):
-    if not os.path.exists(db_path):
-        st.error(f"❌ ไม่พบไฟล์ฐานข้อมูล: {db_path}")
+    if not os.path.exists(DB_PATH):
+        st.error(f"❌ ไม่พบไฟล์ฐานข้อมูล: {DB_PATH}")
         return pd.DataFrame()
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(DB_PATH)
         df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
         conn.close()
 
-        # ✅ เพิ่มคอลัมน์นับ token ถ้าเป็นตาราง messages
+        # ✅ จัดการ token count สำหรับตารางข้อความ
         if table_name == "messages" and "content" in df.columns:
             df["token_count"] = df["content"].apply(lambda x: count_tokens(x))
+
+        # ✅ จัดรูปแบบ datetime
+        if "created_at" in df.columns:
+            df["created_at"] = pd.to_datetime(
+                df["created_at"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # ✅ ขยับ token_count ไปท้ายตาราง
+        if "token_count" in df.columns:
+            cols = [col for col in df.columns if col != "token_count"] + ["token_count"]
+            df = df[cols]
 
         return df
     except sqlite3.OperationalError as e:
         st.error(f"❌ SQLite Error: {e}")
         return pd.DataFrame()
+
 
 # Mapping label to table names (whitelist)
 TABLES = {
@@ -54,55 +74,57 @@ TABLES = {
     "ข้อความ (messages)": "messages",
     "Prompts": "prompts",
     "ส่งออกแล้ว (sent_records)": "sent_records",
-    "JSON ต้นฉบับ (raw_jsons)": "raw_json"
+    "JSON ต้นฉบับ (raw_jsons)": "raw_json",
 }
 
 st.title("📊 ข้อมูลจากฐานข้อมูล")
 
 selected_label = st.selectbox("เลือกตาราง", list(TABLES.keys()))
 table_name = TABLES[selected_label]
+
+# ✅ reset page เมื่อเปลี่ยนตาราง
+if "last_table" not in st.session_state or st.session_state["last_table"] != table_name:
+    st.session_state["page"] = 1
+    st.session_state["last_table"] = table_name
+
 df = fetch_table(table_name)
 
 if df.empty:
     st.warning("⚠️ ไม่พบข้อมูลในตาราง หรือเกิดข้อผิดพลาดระหว่างอ่านข้อมูล")
 else:
-    ROWS_PER_PAGE = 20  # จำนวนแถวต่อหน้า
+    ROWS_PER_PAGE = 20
     total_rows = len(df)
     total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
 
+    st.markdown(f"### 🧾 ตาราง: `{table_name}`")
+
     datacol1, datacol2, datacol3 = st.columns([4, 4, 2])
     with datacol1:
-        st.markdown("""
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-                    <span style="font-size: 14px; margin-bottom: 8px;"> </span>
-                </div>
-                """, unsafe_allow_html=True)
+        st.markdown("")
     with datacol2:
-        st.markdown("""
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-                    <span style="font-size: 14px; margin-bottom: 8px;"> </span>
-                </div>
-                """, unsafe_allow_html=True)
+        st.markdown("")
     with datacol3:
-        page = st.number_input(
+        st.session_state["page"] = st.number_input(
             "เลือกหน้าที่ต้องการ",
             min_value=1,
             max_value=total_pages,
-            value=1,
-            step=1
+            value=st.session_state.get("page", 1),
+            step=1,
+            key="page_input",
         )
-        start_idx = (page - 1) * ROWS_PER_PAGE
-        end_idx = start_idx + ROWS_PER_PAGE
-        paginated_df = df.iloc[start_idx:end_idx]
 
-    st.caption(f"🔢 แสดงหน้า {page} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว")
+    start_idx = (st.session_state["page"] - 1) * ROWS_PER_PAGE
+    end_idx = start_idx + ROWS_PER_PAGE
+    paginated_df = df.iloc[start_idx:end_idx]
+
+    st.caption(
+        f"🔢 แสดงหน้า {st.session_state['page']} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว"
+    )
     st.dataframe(paginated_df, use_container_width=True)
 
     st.download_button(
         "⬇️ ดาวน์โหลด CSV",
         df.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"{table_name}.csv",
-        mime="text/csv"
+        mime="text/csv",
     )
-                    
-
