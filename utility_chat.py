@@ -75,37 +75,37 @@ def initialize_schema(conn, schema_path=schema_path):
 
 # ===== บันทึกบทสนทนาลงฐานข้อมูล =====
 def save_conversation_if_ready(
-	conn, cursor, messages_key, source="chat_gpt", **token_usage
+    conn, cursor, messages_key="messages_gpt", source="chat_gpt", **token_usage
 ):
-	import streamlit as st
+    import streamlit as st
 
-	messages = st.session_state.get(messages_key, [])
-	conv_key = f"conversation_id_{messages_key}"
-	last_key = f"last_saved_count_{messages_key}"
-	conv_id = st.session_state.get(conv_key)
-	last_saved_count = st.session_state.get(last_key, 0)
-	user_id = st.session_state.get("user_id", "guest")
+    messages = st.session_state.get(messages_key, [])
+    conv_key = f"conversation_id_{messages_key}"
+    last_key = f"last_saved_count_{messages_key}"
+    conv_id = st.session_state.get(conv_key)
+    last_saved_count = st.session_state.get(last_key, 0)
+    user_id = st.session_state.get("user_id", "guest")
 
-	# ✅ กรณีเป็นการต่อบทสนทนาในหน้า History
-	if "conv_id" in st.session_state and conv_id is None:
-		conv_id = st.session_state["conv_id"]
-		st.session_state[conv_key] = conv_id
+    # ✅ กรณีเป็นการต่อบทสนทนาในหน้า History
+    if "conv_id" in st.session_state and conv_id is None:
+        conv_id = st.session_state["conv_id"]
+        st.session_state[conv_key] = conv_id
 
-	# ✅ เงื่อนไข: ต้องมีอย่างน้อย 2 ข้อความ (user+assistant) และใหม่กว่ารอบก่อน
-	if len(messages) >= 2 and len(messages) > last_saved_count:
-		last_two = messages[-2:]
+    # ✅ เงื่อนไข: ต้องมีอย่างน้อย 2 ข้อความ (user+assistant) และใหม่กว่ารอบก่อน
+    if len(messages) >= 2 and len(messages) > last_saved_count:
+        last_two = messages[-2:]
 
-		if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
-			# ✅ ถ้ายังไม่มี conv_id → สร้าง conversation ใหม่
-			if conv_id is None:
-				try:
-					from utility_ai import generate_title_from_conversation
+        if last_two[0]["role"] == "user" and last_two[1]["role"] == "assistant":
+            # ✅ ถ้ายังไม่มี conv_id → สร้าง conversation ใหม่
+            if conv_id is None:
+                try:
+                    from utility_ai import generate_title_from_conversation
 
-					title = generate_title_from_conversation(messages)
-				except Exception:
-					title = messages[0].get("content", "บทสนทนาใหม่")[:30]
+                    title = generate_title_from_conversation(messages)
+                except Exception:
+                    title = messages[0].get("content", "บทสนทนาใหม่")[:30]
 
-				cursor.execute(
+                cursor.execute(
 					"""
 					INSERT INTO conversations (
 						user_id, title, source,
@@ -122,13 +122,13 @@ def save_conversation_if_ready(
 						token_usage.get("total_tokens", 0),
 					),
 				)
-				conv_id = cursor.lastrowid
-				st.session_state[conv_key] = conv_id
+                conv_id = cursor.lastrowid
+                st.session_state[conv_key] = conv_id
 
-			# ✅ บันทึกเฉพาะข้อความใหม่
-			try:
-				for msg in messages[last_saved_count:]:
-					cursor.execute(
+            # ✅ บันทึกเฉพาะข้อความใหม่
+            try:
+                for msg in messages[last_saved_count:]:
+                    cursor.execute(
 						"""
 						INSERT INTO messages (
 							user_id, conversation_id, role, content,
@@ -149,11 +149,11 @@ def save_conversation_if_ready(
 						),
 					)
 
-					message_id = cursor.lastrowid  # << สำคัญ: เก็บรหัสข้อความที่เพิ่ง insert
+                    message_id = cursor.lastrowid  # << สำคัญ: เก็บรหัสข้อความที่เพิ่ง insert
 
-					# ✅ บันทึก response_json ซ้ำลงตาราง raw_json (เฉพาะ assistant)
-					if msg.get("role") == "assistant":
-						cursor.execute(
+                    # ✅ บันทึก response_json ซ้ำลงตาราง raw_json (เฉพาะ assistant)
+                    if msg.get("role") == "assistant":
+                        cursor.execute(
 							"""
 							INSERT INTO raw_json (conversation_id, message_id, response_json)
 							VALUES (?, ?, ?)
@@ -164,15 +164,15 @@ def save_conversation_if_ready(
 								msg.get("response_json", "{}"),
 							),
 						)
-				conn.commit()
-				st.session_state[last_key] = len(messages)
-				st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}", icon="💬")
+                conn.commit()
+                st.session_state[last_key] = len(messages)
+                st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}", icon="💬")
 
-			except Exception as e:
-				st.error(f"❌ บันทึกข้อความล้มเหลว: {e}")
-				return None
+            except Exception as e:
+                st.error(f"❌ บันทึกข้อความล้มเหลว: {e}")
+                return None
 
-	return conv_id
+    return conv_id
 
 
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
