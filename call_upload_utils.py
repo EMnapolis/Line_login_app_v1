@@ -230,12 +230,12 @@ def process_records(df, tmp_token, chat_token, contact_id):
 def process_single_record(row, tmp_token, chat_token, contact_id):
     rec_id = str(row["Id"])
     try:
-        # แปลงเวลา
+        # แปลงเวลาเป็นเขตเวลาประเทศไทย
         start_time_utc = datetime.strptime(row["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
         start_time_local = start_time_utc + timedelta(hours=7)
         start_time_str = start_time_local.strftime("%Y-%m-%d %H:%M:%S")
 
-        # ดึงข้อมูลที่จำเป็น
+        # ดึงข้อมูลที่จำเป็นสำหรับข้อความ
         from_num = row["FromCallerNumber"].replace("Ext.", "")
         to_num = row["ToCallerNumber"]
         from_display = row["FromDisplayName"]
@@ -251,7 +251,7 @@ def process_single_record(row, tmp_token, chat_token, contact_id):
             log_failed(rec_id, "Download failed")
             return None
 
-        # อัปโหลดไฟล์
+        # อัปโหลดไฟล์ไปยัง ASB storage
         file_url = upload_file_to_asb(filepath, contact_id)
         os.remove(filepath)
         if not file_url:
@@ -261,7 +261,7 @@ def process_single_record(row, tmp_token, chat_token, contact_id):
         # สร้างห้องแชท
         room_id = create_chat_room(target_num, chat_token, contact_id)
 
-        # สร้างข้อความ
+        # ปรับรูปแบบข้อความตาม CallType
         if call_type == "InboundExternal":
             from_display_clean = from_display.split(":")[-1] if ":" in from_display else from_display
             message = f"From_{from_num}_{from_display_clean}_To_{to_num}_{to_display}_เมื่อ_{start_time_str}"
@@ -272,7 +272,7 @@ def process_single_record(row, tmp_token, chat_token, contact_id):
                 message += f"_{to_display_clean}"
             message += f"_เมื่อ_{start_time_str}"
 
-        # ส่งข้อความเสียง
+        # สร้างโครงสร้างข้อความสำหรับ ChatCenter
         structure = json_helper(file_url)
         msg_payload = {
             "room_id": room_id,
@@ -285,10 +285,12 @@ def process_single_record(row, tmp_token, chat_token, contact_id):
             "sender": 1,
             "private_flag": "0"
         }
+
+        # ส่งข้อความเสียงเข้า ChatCenter
         requests.post("https://ccapi-stg.villa-marketjp.com/ChatCenter/CreateChatMessge",
                       headers={"Authorization": f"Bearer {chat_token}"}, json=msg_payload)
 
-        # ส่งข้อความซ้ำเป็น text
+        # ส่งข้อความ text ซ้ำอีกครั้ง
         text_payload = msg_payload.copy()
         text_payload["message_type"] = "text"
         text_payload["msg_structure"] = ""
