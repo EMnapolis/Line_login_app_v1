@@ -88,19 +88,10 @@ if tab_choice == "💬 สนทนากับ GPT":
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
     st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
 
-<<<<<<< HEAD
+
     with st.expander("📂 ขยายเพื่ออัปโหลดไฟล์ (txt, csv, xlsx)", expanded=False):
         uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
 
-||||||| 1211786
-    uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
-
-=======
-    # อัปโหลดไฟล์
-    uploaded_file = st.file_uploader(
-		"📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"]
-	)
->>>>>>> origin/dev_yok
     if uploaded_file:
         try:
             file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
