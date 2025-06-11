@@ -277,25 +277,19 @@ if menu == "หน้าคำสั่งทำงาน":
             st.session_state["is_processing"] = True
 
             selected_df = st.session_state["full_df"]
-            selected_df = selected_df[selected_df["Id"].isin(selected_ids)]
+            selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
 
-            st.info(f"📋 กำลังประมวลผล {len(selected_df)} รายการ...")
+            #st.info(f"📋 กำลังประมวลผล {len(selected_df)} รายการ...")
 
             # ✅ แสดง progress bar
-            progress = st.progress(0, text="⏳ กำลังประมวลผล...")
-
-            try:
-                # ❗ ใช้ logic เดิม (process_records ทำ loop อยู่แล้ว)
+            with st.spinner("🔄 ประมวลผล..."):
                 processed_df = process_records(selected_df, tmp_token, chat_token, contact_id)
-                st.session_state["processed"] = True
-                st.session_state["processed_df"] = processed_df
-                st.success("🎉 ประมวลผลเสร็จสิ้นแล้ว!")
-            except Exception as e:
-                st.error("❌ เกิดข้อผิดพลาดระหว่างประมวลผล")
-                st.exception(e)
 
-            progress.progress(1.0, text=f"✅ ประมวลผล {len(selected_df)} รายการเรียบร้อยแล้ว")
+            st.session_state["processed"] = True
+            st.session_state["processed_df"] = processed_df
             st.session_state["is_processing"] = False
+
+            st.success(f"🎉 ประมวลผลสำเร็จ {len(processed_df)} รายการ")
 
 
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
