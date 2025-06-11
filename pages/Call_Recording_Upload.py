@@ -182,35 +182,53 @@ if menu == "หน้าคำสั่งทำงาน":
                
     if "full_df" in st.session_state:
         df = st.session_state["full_df"]
+
+        # 🔍 ส่วนค้นหาและกรองประเภทสาย
         search1, search2, search3 = st.columns([1, 1, 1])
-        with search1:
+        with search1:   # 🔎 ค้นหาจาก rec_id หรือ preview
             search_text = st.text_input("🔎 ค้นหา rec_id หรือข้อความสรุปสาย", value="")
-        with search2:
+        with search2:   # 📞 ตัวกรองประเภทสาย
             call_type_filter = st.selectbox("📞 ประเภทสาย", options=["ทั้งหมด", "InboundExternal", "OutboundExternal"])
-        with search3:
+        with search3:   # 🧹 เริ่มต้นด้วยสำเนา DataFrame
             filtered_df = df.copy()
 
+            # กรองด้วยข้อความค้นหา
             if search_text:
                 search_lower = search_text.lower()
                 filtered_df = filtered_df[
                     filtered_df["Id"].str.lower().str.contains(search_lower) |
                     filtered_df["preview_message"].str.lower().str.contains(search_lower)
                 ]
+            # กรองด้วยประเภทสาย
             if call_type_filter != "ทั้งหมด":
                 filtered_df = filtered_df[filtered_df["CallType"] == call_type_filter]
 
-            ROWS_PER_PAGE = 50
+            # ✅ FIX BUG: ตรวจว่าข้อมูลว่าง
             total_rows = len(filtered_df)
+            if total_rows == 0:
+                st.warning("⚠️ ไม่พบข้อมูลที่ตรงกับเงื่อนไข")
+                st.stop()
+
+            # แสดงผลแบบแบ่งหน้า
+            ROWS_PER_PAGE = 50
             total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
 
-            page = st.number_input("เลือกหน้า", min_value=1, max_value=total_pages, value=1, step=1)
-
+            # 🧭 แสดงตัวเลือกหน้า (fix max_value)
+            page = st.number_input(
+                    "เลือกหน้า",
+                    min_value=1,
+                    max_value=max(1, total_pages),
+                    value=1,
+                    step=1
+                )
             start_idx = (page - 1) * ROWS_PER_PAGE
             end_idx = start_idx + ROWS_PER_PAGE
             paginated_df = filtered_df.iloc[start_idx:end_idx]
 
+        # 🧾 แสดงจำนวนแถวและหน้าที่กำลังดู
         st.caption(f"🔢 แสดงหน้า {page} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว")
 
+        # ✅ ปุ่มจัดการ selection
         button_col1, button_col2, button_col3, button_col4 = st.columns([5, 4, 6, 6])
         with button_col1:
             if st.button("🔘 เลือกทั้งหมด (ทุกหน้า)", disabled=st.session_state.get("is_processing", False)):
@@ -225,6 +243,7 @@ if menu == "หน้าคำสั่งทำงาน":
         with button_col3:
             st.markdown("")
 
+        # ✅ แสดง checkbox สำหรับแต่ละรายการ
         for _, row in paginated_df.iterrows():
             rec_id = row["Id"]
             preview = row["preview_message"]
@@ -243,10 +262,12 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.session_state["selected_ids"].append(rec_id)
                 elif not checked and rec_id in st.session_state["selected_ids"]:
                     st.session_state["selected_ids"].remove(rec_id)
-    
+
+        st.info(f"📋 พบรายการที่เลือก: {len(st.session_state.get('selected_ids', []))} รายการ")
+
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
-
+        
         if not tmp_token or not chat_token:
             st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
         elif not st.session_state.get("selected_ids"):
@@ -256,12 +277,29 @@ if menu == "หน้าคำสั่งทำงาน":
             selected_df = st.session_state["full_df"]
             selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
 
-            with st.spinner("🔄 กำลังประมวลผล..."):
-                processed_df = process_records(selected_df, tmp_token, chat_token, contact_id)
+            st.info(f"📋 กำลังประมวลผล {len(selected_df)} รายการ...")
 
+            # ✅ แสดง progress bar
+            progress = st.progress(0, text="⏳ เริ่มประมวลผล...")
+
+            output_rows = []
+            total = len(selected_df)
+
+            # ✅ วน loop พร้อมแสดงความคืบหน้า
+            for i, (_, row) in enumerate(selected_df.iterrows(), 1):
+                try:
+                    result = process_single_record(row, tmp_token, chat_token, contact_id)  # ← ปรับเป็นแบบทีละแถว
+                    if result:
+                        output_rows.append(result)
+                except Exception as e:
+                    st.warning(f"❌ Error: {e}")
+                progress.progress(i / total, text=f"🚀 ประมวลผล {i}/{total} รายการ")
+
+            # ✅ เก็บผลลัพธ์และปิด progress
             st.session_state["processed"] = True
-            st.session_state["processed_df"] = processed_df
+            st.session_state["processed_df"] = pd.DataFrame(output_rows)
             st.session_state["is_processing"] = False
+            st.success("🎉 ประมวลผลเสร็จสิ้นแล้ว!")
 
 
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
