@@ -133,7 +133,7 @@ if menu == "📊 ข้อมูลจากฐานข้อมูล":
             mime="text/csv",
         )
 
-else if menu == "Backup/Restore":
+elif menu == "Backup/Restore":
     st.title("📦 Backup / Restore Database")
     st.markdown("""
         ### ℹ️ คำแนะนำสำหรับการใช้งานระบบ Backup / Restore ฐานข้อมูล
