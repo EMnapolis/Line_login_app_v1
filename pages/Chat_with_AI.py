@@ -89,16 +89,34 @@ if "default_model" not in st.session_state:
 
 # ==== ให้ผู้ใช้เลือกโมเดลเริ่มต้นแบบซ่อน UI ====
 with st.expander("⚙️ ตั้งค่าโมเดลเริ่มต้น (ผู้ดูแลระบบ)"):
-    default_model = st.selectbox(
-        "🧠 เลือกโมเดลเริ่มต้นที่ต้องการใช้งานจริง",
-        chat_all_in_one,
-        index=chat_all_in_one.index(st.session_state["default_model"]),
-        key="default_model_selector",
-    )
+    try:
+        default_model = st.selectbox(
+            "🧠 เลือกโมเดลเริ่มต้นที่ต้องการใช้งานจริง",
+            chat_all_in_one,
+            index=chat_all_in_one.index(st.session_state["default_model"]),
+            key="default_model_selector",
+        )
+    except ValueError:
+        default_model = "gpt-4o"
+
     st.session_state["default_model"] = default_model
 
 # ===== ใช้งานจริง =====
 model_choice = st.session_state["default_model"]
+
+st.markdown(f"✅ **โมเดลที่ใช้งานขณะนี้:** `{model_choice}`", unsafe_allow_html=True)
+
+if st.button("🆕 เริ่มต้นบทสนทนาใหม่"):
+    for key in [
+        "chat_all_in_one",
+        "messages_prompt",
+        "analysis_result",
+        "file_content",
+        "conversation_title",
+        "uploaded_filename",
+    ]:
+        st.session_state.pop(key, None)
+    st.rerun()
 
 # ตรวจจับการเปลี่ยนแท็บ
 reset_tab(tab_choice, model_choice)
@@ -182,10 +200,9 @@ if tab_choice == "💬 สนทนากับ GPT":
 
                 with st.chat_message("assistant"):
                     stream_output = st.empty()
-                    result = stream_response_by_model(
+                    result = display_ai_response_info(
                         model_choice, base_messages, stream_output
                     )
-                    stream_output.markdown(result["reply"])
 
                 # เพิ่มข้อความตอบกลับเข้า history
                 st.session_state["chat_all_in_one"].append(
@@ -303,19 +320,19 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         # เตรียมข้อมูลสำหรับส่งไปยังโมเดล
                         file_content = st.session_state.get("file_content", "")
                         full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"
-                        system_prompt = "คุณคือผู้ช่วยอัจฉริยะที่ทำตามคำสั่งได้อย่างแม่นยำ เช่น แปล สรุป วิเคราะห์ โดยใช้เนื้อหาจากไฟล์"
+                        system_prompt = selected_prompt
 
                         base_messages = [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": full_input},
                         ]
 
+                        start_time = time.time()
                         with st.chat_message("assistant"):
                             stream_output = st.empty()
-                            result = stream_response_by_model(
+                            result = display_ai_response_info(
                                 model_choice, base_messages, stream_output
                             )
-                            stream_output.markdown(result["reply"])
 
                         # จัดเก็บผลลัพธ์ใน session_state
                         reply = result["reply"]
@@ -385,17 +402,16 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         base_messages = [
                             {
                                 "role": "system",
-                                "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี",
+                                "content": selected_prompt,
                             },
                             {"role": "user", "content": full_input},
                         ]
 
                         with st.chat_message("assistant"):
                             stream_output = st.empty()
-                            result = stream_response_by_model(
+                            result = display_ai_response_info(
                                 model_choice, base_messages, stream_output
                             )
-                            stream_output.markdown(result["reply"])
 
                         reply = result["reply"]
                         raw_json = result["response_json"]

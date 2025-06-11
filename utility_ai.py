@@ -187,11 +187,36 @@ def stream_response_by_model(model_name, messages, stream_output):
 
 
 def get_ollama_models():
-	try:
-		response = requests.get(f"{OLLAMA_SERVER_URL}/api/tags")
-		response.raise_for_status()
-		data = response.json()
-		return [m["name"] for m in data.get("models", [])]
-	except Exception as e:
-		print(f"❌ ไม่สามารถดึงรายชื่อโมเดลจาก Ollama ได้: {e}")
-		return []
+    try:
+        response = requests.get(f"{OLLAMA_SERVER_URL}/api/tags")
+        response.raise_for_status()
+        data = response.json()
+        return [m["name"] for m in data.get("models", [])]
+    except Exception as e:
+        print(f"❌ ไม่สามารถดึงรายชื่อโมเดลจาก Ollama ได้: {e}")
+        return []
+
+
+def display_ai_response_info(model_choice, base_messages, stream_output):
+    """
+    เรียก model แล้วแสดงผล พร้อมข้อมูล tokens, model และเวลาใช้
+    ส่งคืน result["reply"] ด้วย
+    """
+    start_time = time.time()
+
+    result = stream_response_by_model(model_choice, base_messages, stream_output)
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
+
+    reply = result["reply"]
+    stream_output.markdown(reply)
+
+    st.caption(
+        f"📌 ใช้โมเดล: `{model_choice}` | "
+        f"Tokens: Prompt = {result['prompt_tokens']}, Completion = {result['completion_tokens']}, "
+        f"รวม = {result['total_tokens']} | "
+        f"⏱️ ใช้เวลา {duration} วินาที"
+    )
+
+    return result
