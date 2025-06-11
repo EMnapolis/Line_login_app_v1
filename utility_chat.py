@@ -140,8 +140,8 @@ def save_conversation_if_ready(
                 conv_id = cursor.lastrowid
                 st.session_state[conv_key] = conv_id
 
-            # ✅ บันทึกข้อความใหม่
             try:
+                # ✅ บันทึกข้อความใหม่ทั้งหมด
                 for msg in messages[last_saved_count:]:
                     cursor.execute(
                         """
@@ -176,6 +176,18 @@ def save_conversation_if_ready(
                                 msg.get("response_json", "{}"),
                             ),
                         )
+
+                # ✅ บันทึก Token Usage
+                log_token_usage(
+                    conn,
+                    cursor,
+                    user_id,
+                    source,
+                    token_usage.get("prompt_tokens", 0),
+                    token_usage.get("completion_tokens", 0),
+                    token_usage.get("total_tokens", 0),
+                )
+
                 conn.commit()
                 st.session_state[last_key] = len(messages)
                 st.toast(f"💾 บันทึกบทสนทนาใหม่จาก {source}", icon="💬")
@@ -185,6 +197,41 @@ def save_conversation_if_ready(
                 return None
 
     return conv_id
+
+#
+def log_token_usage(
+    conn, cursor, user_id, model, prompt_tokens, completion_tokens, total_tokens
+):
+    try:
+        cursor.execute(
+            """
+            INSERT INTO token_usage (user_id, model, prompt_tokens, completion_tokens, total_tokens, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (user_id, model, prompt_tokens, completion_tokens, total_tokens),
+        )
+        conn.commit()
+    except Exception as e:
+        import streamlit as st
+
+        st.warning(f"⚠️ ไม่สามารถบันทึก token usage ได้: {e}")
+
+def get_token_usage_summary(cursor, user_id=None):
+    query = """
+        SELECT user_id, SUM(total_tokens) as total_tokens
+        FROM token_usage
+    """
+    params = []
+
+    if user_id:
+        query += " WHERE user_id = ?"
+        params.append(user_id)
+
+    query += " GROUP BY user_id"
+
+    cursor.execute(query, params)
+    return cursor.fetchall()
+
 
 # ===== ใช้ AI ตั้งชื่อบทสนทนาแบบย่อ =====
 def generate_title_from_conversation(messages, model="gpt-4o"):
