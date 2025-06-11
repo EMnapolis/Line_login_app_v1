@@ -72,7 +72,6 @@ if menu == "หน้าคำสั่งทำงาน":
         with vl3cx2:
             if "login_status" in st.session_state:
                 st.markdown(st.session_state.login_status)
-
         with vl3cx3:
             if st.button("Refresh Token"):
                 if st.session_state.refresh_token:
@@ -87,6 +86,12 @@ if menu == "หน้าคำสั่งทำงาน":
         with vl3cx4:
             if "refresh_status" in st.session_state:
                 st.markdown(st.session_state.refresh_status)
+        
+        showtk1, showtk2 = st.columns([1,1])
+        with showtk1:
+            access_token = st.text_input("3CX Access Token",value=st.session_state.access_token, type="password")
+        with showtk2:
+            refresh_token = st.text_input("3CX Refresh Token",value=st.session_state.refresh_token, type="password")
 
         tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
                                 value=st.session_state.tmp_token, type="password",
@@ -97,7 +102,7 @@ if menu == "หน้าคำสั่งทำงาน":
                                    value = CHAT_TOKEN_VL,type="password",
                                    help="กรอก chat_token ที่ได้รับจาก https://cc-stg.villa-marketjp.com")
         contact_id = st.number_input("Contact ID", value=3)
-    chat_tk1, chat_tk2, chat_tk3 = st.columns([2,3,5]) # แบ่งคอลัมน์ให้แสดงผล 
+    chat_tk1, chat_tk2, chat_tk3 = st.columns([2,3,7]) # แบ่งคอลัมน์ให้แสดงผล 
     with chat_tk1:
         # --- 🔁 เริ่มต้นใหม่: Clear session state ทั้งหมด ---
         if st.button("🔁 **เริ่มใหม่**", disabled=st.session_state.get("is_processing", False)):
@@ -112,8 +117,8 @@ if menu == "หน้าคำสั่งทำงาน":
     with chat_tk3:
         st.markdown("""
         1️⃣ **กรอก Token และช่วงวันที่ที่ต้องการดึงข้อมูล**  
-        2️⃣ กดปุ่ม 📥 **ดึงข้อมูล JSON จาก 3CX**  
-        3️⃣ กดปุ่ม 🚀 **เริ่มประมวลผลรายการใหม่**
+        2️⃣ กดปุ่ม 📥 **ดึงข้อมูล JSON จาก 3CX และ Filter รายการ**  
+        3️⃣ กดปุ่ม 🚀 **เลือก recId แล้วกดปุ่มเริ่มประมวลผลรายการใหม่**
         """)
 
     if mode == "ดึงข้อมูลจากวันที่":
