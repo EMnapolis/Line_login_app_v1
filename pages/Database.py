@@ -83,52 +83,100 @@ menu = st.sidebar.radio("เมนู", ["📊 ข้อมูลจากฐา
 if menu == "📊 ข้อมูลจากฐานข้อมูล":
     st.title("📊 ข้อมูลจากฐานข้อมูล")
 
-selected_label = st.selectbox("เลือกตาราง", list(TABLES.keys()))
-table_name = TABLES[selected_label]
+    selected_label = st.selectbox("เลือกตาราง", list(TABLES.keys()))
+    table_name = TABLES[selected_label]
 
-# ✅ reset page เมื่อเปลี่ยนตาราง
-if "last_table" not in st.session_state or st.session_state["last_table"] != table_name:
-    st.session_state["page"] = 1
-    st.session_state["last_table"] = table_name
+    # ✅ reset page เมื่อเปลี่ยนตาราง
+    if "last_table" not in st.session_state or st.session_state["last_table"] != table_name:
+        st.session_state["page"] = 1
+        st.session_state["last_table"] = table_name
 
-df = fetch_table(table_name)
+    df = fetch_table(table_name)
 
-if df.empty:
-    st.warning("⚠️ ไม่พบข้อมูลในตาราง หรือเกิดข้อผิดพลาดระหว่างอ่านข้อมูล")
-else:
-    ROWS_PER_PAGE = 20
-    total_rows = len(df)
-    total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
+    if df.empty:
+        st.warning("⚠️ ไม่พบข้อมูลในตาราง หรือเกิดข้อผิดพลาดระหว่างอ่านข้อมูล")
+    else:
+        ROWS_PER_PAGE = 20
+        total_rows = len(df)
+        total_pages = (total_rows - 1) // ROWS_PER_PAGE + 1
 
-    st.markdown(f"### 🧾 ตาราง: `{table_name}`")
+        st.markdown(f"### 🧾 ตาราง: `{table_name}`")
 
-    datacol1, datacol2, datacol3 = st.columns([4, 4, 2])
-    with datacol1:
-        st.markdown("")
-    with datacol2:
-        st.markdown("")
-    with datacol3:
-        st.session_state["page"] = st.number_input(
-            "เลือกหน้าที่ต้องการ",
-            min_value=1,
-            max_value=total_pages,
-            value=st.session_state.get("page", 1),
-            step=1,
-            key="page_input",
+        datacol1, datacol2, datacol3 = st.columns([4, 4, 2])
+        with datacol1:
+            st.markdown("")
+        with datacol2:
+            st.markdown("")
+        with datacol3:
+            st.session_state["page"] = st.number_input(
+                "เลือกหน้าที่ต้องการ",
+                min_value=1,
+                max_value=total_pages,
+                value=st.session_state.get("page", 1),
+                step=1,
+                key="page_input",
+            )
+
+        start_idx = (st.session_state["page"] - 1) * ROWS_PER_PAGE
+        end_idx = start_idx + ROWS_PER_PAGE
+        paginated_df = df.iloc[start_idx:end_idx]
+
+        st.caption(
+            f"🔢 แสดงหน้า {st.session_state['page']} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว"
+        )
+        st.dataframe(paginated_df, use_container_width=True)
+
+        st.download_button(
+            "⬇️ ดาวน์โหลด CSV",
+            df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"{table_name}.csv",
+            mime="text/csv",
         )
 
-    start_idx = (st.session_state["page"] - 1) * ROWS_PER_PAGE
-    end_idx = start_idx + ROWS_PER_PAGE
-    paginated_df = df.iloc[start_idx:end_idx]
+else if menu == "Backup/Restore":
+    st.title("📦 Backup / Restore Database")
+    st.markdown("""
+        ### ℹ️ คำแนะนำสำหรับการใช้งานระบบ Backup / Restore ฐานข้อมูล
 
-    st.caption(
-        f"🔢 แสดงหน้า {st.session_state['page']} จาก {total_pages} | รวมทั้งหมด {total_rows} แถว"
-    )
-    st.dataframe(paginated_df, use_container_width=True)
+        - 🔒 **สำรองข้อมูลก่อนทุกการเปลี่ยนแปลงสำคัญ** เช่น อัปเดตโค้ด, เปลี่ยน schema, หรือเริ่มใช้งานจริง
+        - 📥 **การกดปุ่ม "ดาวน์โหลด" จะบันทึกฐานข้อมูลเวอร์ชันปัจจุบัน** ลงเครื่องของคุณในรูปแบบไฟล์ `.db`
+        - 📤 **การอัปโหลดไฟล์ Restore จะเขียนทับไฟล์ `sqdata.db` เดิมทันที**  
+            ‣ โปรดตรวจสอบว่าไฟล์ที่ใช้คืนข้อมูลเป็นเวอร์ชันล่าสุด และได้จากแหล่งที่เชื่อถือได้  
+            ‣ การ Restore ควรใช้เฉพาะในกรณีต้องย้อนกลับ หรือย้ายข้อมูล
+        - ⚠️ **เมื่อ Restore สำเร็จ กรุณา refresh หน้าแอป (Ctrl+R หรือ F5)** เพื่อโหลดฐานข้อมูลใหม่เข้า memory
+        - 📂 หากต้องการบริหารไฟล์สำรองอย่างเป็นระบบ ควรเก็บในโฟลเดอร์ `backup/` พร้อม timestamp ที่ชัดเจน
 
-    st.download_button(
-        "⬇️ ดาวน์โหลด CSV",
-        df.to_csv(index=False).encode("utf-8-sig"),
-        file_name=f"{table_name}.csv",
-        mime="text/csv",
-    )
+        > 💡 เพื่อความปลอดภัยระดับ production: ควรตั้งสิทธิ์การใช้งานฟังก์ชันนี้เฉพาะ admin หรือ super admin เท่านั้น
+        """)
+    # แบ่งเป็น 2 คอลัมน์
+    backup1, backup2 = st.columns([1, 1])
+
+    # 📥 คอลัมน์ซ้าย: Backup
+    with backup1:
+        st.subheader("📥 Backup Database")
+        if os.path.exists(DB_PATH):
+            with open(DB_PATH, "rb") as f:
+                st.download_button(
+                    label="⬇️ ดาวน์โหลด sqdata.db",
+                    data=f,
+                    file_name="sqdata.db",
+                    mime="application/octet-stream"
+                )
+        else:
+            st.error("❌ ไม่พบไฟล์ฐานข้อมูล: data/sqdata.db")
+
+    # 📤 คอลัมน์ขวา: Restore
+    with backup2:
+        st.subheader("📤 Restore Database")
+        uploaded_file = st.file_uploader("อัปโหลดไฟล์ .db", type=["db"])
+
+        if uploaded_file is not None:
+            confirm = st.checkbox("⚠️ ยืนยันเขียนทับฐานข้อมูล", value=False, key="confirm_restore")
+            if st.button("♻️ Restore ทับฐานข้อมูล", disabled=not confirm):
+                try:
+                    with open(DB_PATH, "wb") as f:
+                        f.write(uploaded_file.read())
+                    st.success("✅ กู้คืนฐานข้อมูลเรียบร้อยแล้ว!")
+                    st.info("🔄 กรุณา refresh หน้าแอปเพื่อโหลดข้อมูลใหม่")
+                except Exception as e:
+                    st.error(f"❌ เกิดข้อผิดพลาดขณะเขียนไฟล์: {e}")
