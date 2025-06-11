@@ -88,19 +88,10 @@ if tab_choice == "💬 สนทนากับ GPT":
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
     st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
 
-<<<<<<< HEAD
+
     with st.expander("📂 ขยายเพื่ออัปโหลดไฟล์ (txt, csv, xlsx)", expanded=False):
         uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
 
-||||||| 1211786
-    uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"])
-
-=======
-    # อัปโหลดไฟล์
-    uploaded_file = st.file_uploader(
-		"📂 อัปโหลดไฟล์ (txt, csv, xlsx)", type=["txt", "csv", "xlsx"]
-	)
->>>>>>> origin/dev_yok
     if uploaded_file:
         try:
             file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
@@ -253,17 +244,8 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-<<<<<<< HEAD
             with st.expander("📂 ขยายเพื่ออัปโหลดไฟล์ (txt, csv, xlsx)", expanded=False):
                 uploaded_file = st.file_uploader("อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
-||||||| 1211786
-            uploaded_file = st.file_uploader("อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt", type=["txt", "csv", "xlsx"])
-=======
-            uploaded_file = st.file_uploader(
-				"อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt",
-				type=["txt", "csv", "xlsx"],
-			)
->>>>>>> origin/dev_yok
             if uploaded_file:
                 file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
                 st.session_state["file_content"] = file_content
