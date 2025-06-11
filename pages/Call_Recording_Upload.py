@@ -296,15 +296,14 @@ if st.button("🚀 เริ่มประมวลผลรายการใ�
             progress.progress(i / total, text=f"🚀 ประมวลผล {i}/{total} รายการ")
 
         # ✅ อัปเดตผลลัพธ์ใน session
-        processed_df = pd.DataFrame(output_rows)
+        st.session_state["processed_df"] = pd.DataFrame(output_rows)
         st.session_state["processed"] = True
-        st.session_state["processed_df"] = processed_df
         st.session_state["is_processing"] = False
 
         st.success(f"🎉 ประมวลผลสำเร็จ {len(processed_df)} รายการ")
 
         if errors:
-            st.warning(f"⚠️ มี {len(errors)} รายการที่ประมวลผลไม่สำเร็จ")
+            #st.warning(f"⚠️ มี {len(errors)} รายการที่ประมวลผลไม่สำเร็จ")
             with st.expander("🔍 ดูรายละเอียดข้อผิดพลาด"):
                 for rec_id, msg in errors:
                     st.write(f"- `{rec_id}`: {msg}")

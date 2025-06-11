@@ -78,7 +78,7 @@ TABLES = {
 }
 
 # Left Pane Menu
-menu = st.sidebar.radio("เมนู", ["📊 ข้อมูลจากฐานข้อมูล", "Backup/Restore db"])
+menu = st.sidebar.radio("เมนู", ["Backup/Restore db", "📊 ข้อมูลจากฐานข้อมูล",])
 
 if menu == "📊 ข้อมูลจากฐานข้อมูล":
     st.title("📊 ข้อมูลจากฐานข้อมูล")
