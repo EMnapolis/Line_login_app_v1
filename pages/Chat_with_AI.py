@@ -63,25 +63,46 @@ if "user_id" not in st.session_state or st.session_state.get("status") != "APPRO
 	st.stop()
 # ---------------
 with st.sidebar:
-	st.markdown("### 📑 เมนูหลัก")
-	tab_choice = st.radio(
+    st.markdown("### 📑 เมนูหลัก")
+    tab_choice = st.radio(
 		"เลือกเมนู",
 		["💬 สนทนากับ GPT", "🧠 สนทนากับ Prompt", "📜 ประวัติการสนทนา", "📘 วิธีการใช้งาน"],
 	)
+
+    # ✅ ปุ่มหยุดการทำงานของ AI
+    st.markdown("---")
+    if st.button("⛔ หยุดการทำงาน", key="stop_button_sidebar"):
+        st.session_state["stop_chat"] = True
+        st.warning("🛑 หยุดการทำงานของ AI แล้ว")
+
 # TODO เลือกโมเดล (เฉพาะในแชท)
-if tab_choice == "💬 สนทนากับ GPT":
-	model_choice = st.radio(
-		"🧠 เลือกโมเดลที่ต้องการใช้",
-		["gpt-4o", "gemma3:latest"],
-		key="model_selector",
-		horizontal=True,
-	)
-else:
-	model_choice = None  # ไม่มีโมเดลสำหรับหน้าอื่น
+# ==== ดึงรายชื่อโมเดลจาก Ollama ====
+ollama_models = (
+    get_ollama_models())  # ควร return เป็น list เช่น ["gemma3:12b", "DSV2:16b"]
+gpt_models = ["gpt-4o"]
+chat_all_in_one = gpt_models + ollama_models
+
+# ==== ตั้ง default model ครั้งแรก ====
+if "default_model" not in st.session_state:
+    # ตั้ง gpt-4o ถ้าไม่มี Ollama หรือเลือกตัวแรกจาก Ollama
+    st.session_state["default_model"] = ollama_models[0] if ollama_models else "gpt-4o"
+
+# ==== ให้ผู้ใช้เลือกโมเดลเริ่มต้นแบบซ่อน UI ====
+with st.expander("⚙️ ตั้งค่าโมเดลเริ่มต้น (ผู้ดูแลระบบ)"):
+    default_model = st.selectbox(
+        "🧠 เลือกโมเดลเริ่มต้นที่ต้องการใช้งานจริง",
+        chat_all_in_one,
+        index=chat_all_in_one.index(st.session_state["default_model"]),
+        key="default_model_selector",
+    )
+    st.session_state["default_model"] = default_model
+
+# ===== ใช้งานจริง =====
+model_choice = st.session_state["default_model"]
+
 # ตรวจจับการเปลี่ยนแท็บ
 reset_tab(tab_choice, model_choice)
 reset_on_button_click()
-
 # ---------------
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
@@ -220,13 +241,6 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
     with tab_chat:
         st.caption("ใช้ Prompt เพื่อคุยกับ GPT ในบริบทที่กำหนด เช่น นักบัญชี นักกฎหมาย")
-
-        model_choice = st.radio(
-			"🧠 เลือกโมเดล",
-			["gpt-4o", "gemma3:latest"],
-			horizontal=True,
-			key="model_selector_prompt",
-		)
 
         prompts = list_prompts()
         prompt_dict = {name: content for name, content in prompts}
@@ -532,7 +546,7 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
         model_choice = st.radio(
 			"🧐 เลือกโมเดลที่ใช้ในการต่อแชท",
-			["gpt-4o", "gemma3:latest"],
+			["gpt-4o", "gemma3:12b"],
 			horizontal=True,
 			key="model_selector_history",
 		)

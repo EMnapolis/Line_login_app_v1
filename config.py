@@ -12,3 +12,5 @@ ACCESS_LOG_FILE = os.getenv("ACCESS_LOG_FILE", "access_log.txt")  # default fall
 OPENAI_API_KEY = os.getenv("openai_api_key")
 
 CHAT_TOKEN = os.getenv("CHAT_TOKEN")
+
+llama_server = os.getenv("OLLAMA_SERVER_URL")
