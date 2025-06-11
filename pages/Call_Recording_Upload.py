@@ -6,7 +6,7 @@ import os
 from call_upload_utils import (
     vl3cx_login, vl3cx_refresh_token,
     fetch_json, process_single_record, load_sent_rec_ids_db,
-    download_recording, upload_file_to_asb,
+    download_recording, upload_file_to_asb,save_token,get_token
     create_chat_room, json_helper, save_sent_rec_id_db, log_failed
 )
 from utility_chat import *
@@ -64,8 +64,8 @@ if menu == "หน้าคำสั่งทำงาน":
             if st.button("Villa3CXLogin"):
                 access_token, refresh_token = vl3cx_login()
                 if access_token and refresh_token:
-                    st.session_state.access_token = access_token
-                    st.session_state.refresh_token = refresh_token
+                    save_token("access_token", access_token)
+                    save_token("refresh_token", refresh_token)
                     st.session_state.login_status = "✅ Login success!"
                 else:
                     st.session_state.login_status = "❌ Login failed."
@@ -74,10 +74,11 @@ if menu == "หน้าคำสั่งทำงาน":
                 st.markdown(st.session_state.login_status)
         with vl3cx3:
             if st.button("Refresh Token"):
-                if st.session_state.refresh_token:
-                    new_token = vl3cx_refresh_token(st.session_state.refresh_token)
+                refresh_token = get_token("refresh_token")
+                if refresh_token:
+                    new_token = vl3cx_refresh_token(refresh_token)
                     if new_token:
-                        st.session_state.tmp_token = new_token
+                        save_token("tmp_token", new_token)
                         st.session_state.refresh_status = "✅ Token refreshed!"
                     else:
                         st.session_state.refresh_status = "❌ Refresh failed."
@@ -89,12 +90,12 @@ if menu == "หน้าคำสั่งทำงาน":
         
         showtk1, showtk2 = st.columns([1,1])
         with showtk1:
-            access_token = st.text_input("3CX Access Token",value=st.session_state.access_token, type="password")
+            access_token = st.text_input("3CX Access Token",value=get_token("access_token"), type="password")
         with showtk2:
-            refresh_token = st.text_input("3CX Refresh Token",value=st.session_state.refresh_token, type="password")
+            refresh_token = st.text_input("3CX Refresh Token",value=get_token("refresh_token"), type="password")
 
         tmp_token = st.text_input("3CX Temporary Access Token (tmp_token)",
-                                value=st.session_state.tmp_token, type="password",
+                                value=get_token("tmp_token"), type="password",
                                 help="กรอก tmp_token จาก 3CX Dashboard (ดูวิธีใน 'วิธีการใช้งาน')")
 
     with st.expander("🔐 ขยายเพื่อแก้ไข Chat Token และ Contact ID", expanded=False):

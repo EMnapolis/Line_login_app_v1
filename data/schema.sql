@@ -81,3 +81,13 @@ CREATE TABLE IF NOT EXISTS sent_records (
     recId TEXT PRIMARY KEY,                                   -- รหัสข้อมูลที่เคยถูกส่งออกแล้ว
     msg TEXT
 );
+
+-- ===========================================
+-- Table: token_store
+-- ใช้เก็บ token เพื่อเรียกใช้ โดย รองรับ get_token และ save_token
+-- ===========================================
+CREATE TABLE IF NOT EXISTS token_store (
+  name TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

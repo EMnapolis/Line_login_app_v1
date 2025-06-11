@@ -55,6 +55,23 @@ def vl3cx_refresh_token(refresh_token: str):
     result = response.json()
     return result.get("access_token")
 
+def save_token(name: str, value: str):
+    now = datetime.now().isoformat()
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO token_store (name, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at;
+        """, (name, value, now))
+
+def get_token(name: str) -> str:
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT value FROM token_store WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        return row[0] if row else ""
+
 def fetch_json(tmp_token, from_date, to_date):
     # แปลงวันที่จากไทยเป็น UTC (ลบ 7 ชั่วโมง)
     from_dt = datetime.combine(from_date, datetime.min.time())
