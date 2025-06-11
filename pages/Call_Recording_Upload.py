@@ -262,9 +262,11 @@ if menu == "หน้าคำสั่งทำงาน":
                     st.session_state["selected_ids"].append(rec_id)
                 elif not checked and rec_id in st.session_state["selected_ids"]:
                     st.session_state["selected_ids"].remove(rec_id)
-
-        st.info(f"📋 พบรายการที่เลือก: {len(st.session_state.get('selected_ids', []))} รายการ")
-
+        
+        #แสดงจำนวนรายการที่เลือกก่อนเริ่ม
+        selected_ids = st.session_state.get("selected_ids", [])
+        st.info(f"📋 พบรายการที่เลือก: {len(selected_ids)} รายการ")
+    
     # ปุ่มเริ่มประมวลผล
     if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
         
@@ -274,32 +276,27 @@ if menu == "หน้าคำสั่งทำงาน":
             st.warning("กรุณาเลือกรายการ rec_id อย่างน้อยหนึ่งรายการ")
         else:
             st.session_state["is_processing"] = True
+
             selected_df = st.session_state["full_df"]
-            selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
+            selected_df = selected_df[selected_df["Id"].isin(selected_ids)]]
 
             st.info(f"📋 กำลังประมวลผล {len(selected_df)} รายการ...")
 
             # ✅ แสดง progress bar
-            progress = st.progress(0, text="⏳ เริ่มประมวลผล...")
+            progress = st.progress(0, text="⏳ กำลังประมวลผล...")
 
-            output_rows = []
-            total = len(selected_df)
+            try:
+                # ❗ ใช้ logic เดิม (process_records ทำ loop อยู่แล้ว)
+                processed_df = process_records(selected_df, tmp_token, chat_token, contact_id)
+                st.session_state["processed"] = True
+                st.session_state["processed_df"] = processed_df
+                st.success("🎉 ประมวลผลเสร็จสิ้นแล้ว!")
+            except Exception as e:
+                st.error("❌ เกิดข้อผิดพลาดระหว่างประมวลผล")
+                st.exception(e)
 
-            # ✅ วน loop พร้อมแสดงความคืบหน้า
-            for i, (_, row) in enumerate(selected_df.iterrows(), 1):
-                try:
-                    result = process_single_record(row, tmp_token, chat_token, contact_id)  # ← ปรับเป็นแบบทีละแถว
-                    if result:
-                        output_rows.append(result)
-                except Exception as e:
-                    st.warning(f"❌ Error: {e}")
-                progress.progress(i / total, text=f"🚀 ประมวลผล {i}/{total} รายการ")
-
-            # ✅ เก็บผลลัพธ์และปิด progress
-            st.session_state["processed"] = True
-            st.session_state["processed_df"] = pd.DataFrame(output_rows)
+            progress.progress(1.0, text=f"✅ ประมวลผล {len(selected_df)} รายการเรียบร้อยแล้ว")
             st.session_state["is_processing"] = False
-            st.success("🎉 ประมวลผลเสร็จสิ้นแล้ว!")
 
 
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
