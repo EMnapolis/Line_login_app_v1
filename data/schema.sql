@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     prompt_tokens INTEGER,                          -- จำนวน token ของ prompt
     completion_tokens INTEGER,                      -- จำนวน token ของคำตอบที่ AI สร้าง
     total_tokens INTEGER,                           -- token รวมของข้อความนี้
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- เวลาที่สร้างบทสนทนา
+    created_at TEXT DEFAULT (DATETIME('now', '+7 hours')) -- เวลาที่สร้างบทสนทนา
 );
 
 -- สร้างตาราง messages สำหรับเก็บข้อความในแต่ละบทสนทนา
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS messages (
     completion_tokens INTEGER,                      -- จำนวน token ของคำตอบที่ AI สร้าง
     total_tokens INTEGER,                           -- token รวมของข้อความนี้
     response_json TEXT,                             -- ✅ เก็บ JSON ทั้ง body ที่ได้จาก GPT API
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- เวลาที่บันทึกข้อความนี้
+    created_at TEXT DEFAULT (DATETIME('now', '+7 hours')), -- เวลาที่บันทึกข้อความนี้
     FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS raw_json (
     conversation_id INTEGER,                         -- รหัสบทสนทนา (อ้างอิงถึง conversations.id)
     message_id INTEGER NOT NULL,                     -- รหัสข้อความ (อ้างอิงถึง messages.id)
     response_json TEXT NOT NULL,                     -- JSON ต้นฉบับจาก GPT API
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- เวลาที่เก็บ JSON นี้
+    created_at TEXT DEFAULT (DATETIME('now', '+7 hours')),   -- เวลาที่เก็บ JSON นี้
     FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
