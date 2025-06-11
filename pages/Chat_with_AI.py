@@ -543,14 +543,6 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 						f"prompt={msg.get('prompt_tokens', 0)}, "
 						f"completion={msg.get('completion_tokens', 0)}"
 					)
-
-        model_choice = st.radio(
-			"🧐 เลือกโมเดลที่ใช้ในการต่อแชท",
-			["gpt-4o", "gemma3:12b"],
-			horizontal=True,
-			key="model_selector_history",
-		)
-
         if prompt := st.chat_input(
 			"💬 พิมพ์ข้อความเพื่อต่อบทสนทนา", key="chat_continue_input"
 		):
