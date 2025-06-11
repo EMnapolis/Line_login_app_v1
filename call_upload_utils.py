@@ -226,3 +226,83 @@ def process_records(df, tmp_token, chat_token, contact_id):
         except Exception as e:
             log_failed(rec_id, str(e))
     return pd.DataFrame(output_rows)
+
+def process_single_record(row, tmp_token, chat_token, contact_id):
+    rec_id = str(row["Id"])
+    try:
+        # แปลงเวลา
+        start_time_utc = datetime.strptime(row["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
+        start_time_local = start_time_utc + timedelta(hours=7)
+        start_time_str = start_time_local.strftime("%Y-%m-%d %H:%M:%S")
+
+        # ดึงข้อมูลที่จำเป็น
+        from_num = row["FromCallerNumber"].replace("Ext.", "")
+        to_num = row["ToCallerNumber"]
+        from_display = row["FromDisplayName"]
+        to_display = row["ToDisplayName"]
+        call_type = row["CallType"]
+
+        # เลือกเบอร์ปลายทางตามประเภทสาย
+        target_num = from_num if call_type == "InboundExternal" else to_num
+
+        # ดาวน์โหลดเสียง
+        filepath = download_recording(rec_id, tmp_token)
+        if not filepath:
+            log_failed(rec_id, "Download failed")
+            return None
+
+        # อัปโหลดไฟล์
+        file_url = upload_file_to_asb(filepath, contact_id)
+        os.remove(filepath)
+        if not file_url:
+            log_failed(rec_id, "Upload failed")
+            return None
+
+        # สร้างห้องแชท
+        room_id = create_chat_room(target_num, chat_token, contact_id)
+
+        # สร้างข้อความ
+        if call_type == "InboundExternal":
+            from_display_clean = from_display.split(":")[-1] if ":" in from_display else from_display
+            message = f"From_{from_num}_{from_display_clean}_To_{to_num}_{to_display}_เมื่อ_{start_time_str}"
+        else:
+            to_display_clean = "" if to_num == to_display else to_display
+            message = f"From_{from_num}_{from_display}_To_{to_num}"
+            if to_display_clean:
+                message += f"_{to_display_clean}"
+            message += f"_เมื่อ_{start_time_str}"
+
+        # ส่งข้อความเสียง
+        structure = json_helper(file_url)
+        msg_payload = {
+            "room_id": room_id,
+            "employee_id": 0,
+            "message": message,
+            "message_type": "audio",
+            "message_status": "send",
+            "msg_structure": structure,
+            "msgid": rec_id,
+            "sender": 1,
+            "private_flag": "0"
+        }
+        requests.post("https://ccapi-stg.villa-marketjp.com/ChatCenter/CreateChatMessge",
+                      headers={"Authorization": f"Bearer {chat_token}"}, json=msg_payload)
+
+        # ส่งข้อความซ้ำเป็น text
+        text_payload = msg_payload.copy()
+        text_payload["message_type"] = "text"
+        text_payload["msg_structure"] = ""
+        requests.post("https://ccapi-stg.villa-marketjp.com/ChatCenter/CreateChatMessge",
+                      headers={"Authorization": f"Bearer {chat_token}"}, json=text_payload)
+
+        # บันทึก log ที่ส่งแล้ว
+        save_sent_rec_id_db(rec_id, message)
+
+        # ส่งออกข้อมูลที่ประมวลผลแล้ว
+        row["fileUrl"] = file_url
+        row["room_id"] = room_id
+        return row
+
+    except Exception as e:
+        log_failed(rec_id, str(e))
+        return None

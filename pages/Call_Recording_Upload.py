@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 import os
 from call_upload_utils import (
     vl3cx_login, vl3cx_refresh_token,
-    fetch_json, process_records, load_sent_rec_ids_db,
+    fetch_json, process_single_record, load_sent_rec_ids_db,
     download_recording, upload_file_to_asb,
     create_chat_room, json_helper, save_sent_rec_id_db, log_failed
 )
@@ -267,29 +267,47 @@ if menu == "หน้าคำสั่งทำงาน":
         selected_ids = st.session_state.get("selected_ids", [])
         st.info(f"📋 พบรายการที่เลือก: {len(selected_ids)} รายการ")
     
-    # ปุ่มเริ่มประมวลผล
-    if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
-        if not tmp_token or not chat_token:
-            st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
-        elif not selected_ids:
-            st.warning("กรุณาเลือกรายการ rec_id อย่างน้อยหนึ่งรายการ")
-        else:
-            st.session_state["is_processing"] = True
+    # ✅ ปุ่มเริ่มประมวลผล
+if st.button("🚀 เริ่มประมวลผลรายการใหม่", disabled=st.session_state.get("is_processing", False)):
+    if not tmp_token or not chat_token:
+        st.error("กรุณาใส่ทั้ง tmp_token และ chat_token")
+    elif not selected_ids:
+        st.warning("กรุณาเลือกรายการ rec_id อย่างน้อยหนึ่งรายการ")
+    else:
+        st.session_state["is_processing"] = True
 
-            selected_df = st.session_state["full_df"]
-            selected_df = selected_df[selected_df["Id"].isin(st.session_state["selected_ids"])]
+        selected_df = st.session_state["full_df"]
+        selected_df = selected_df[selected_df["Id"].isin(selected_ids)]
 
-            #st.info(f"📋 กำลังประมวลผล {len(selected_df)} รายการ...")
+        total = len(selected_df)
+        output_rows = []
+        errors = []
 
-            # ✅ แสดง progress bar
-            with st.spinner("🔄 ประมวลผล..."):
-                processed_df = process_records(selected_df, tmp_token, chat_token, contact_id)
+        progress = st.progress(0, text="⏳ เริ่มประมวลผล...")
 
-            st.session_state["processed"] = True
-            st.session_state["processed_df"] = processed_df
-            st.session_state["is_processing"] = False
+        # ✅ วนลูปทีละรายการ พร้อมอัปเดต progress bar
+        for i, (_, row) in enumerate(selected_df.iterrows(), 1):
+            try:
+                result = process_single_record(row, tmp_token, chat_token, contact_id)
+                if result:
+                    output_rows.append(result)
+            except Exception as e:
+                errors.append((row["Id"], str(e)))  # เก็บข้อผิดพลาดแบบไม่รบกวน
+            progress.progress(i / total, text=f"🚀 ประมวลผล {i}/{total} รายการ")
 
-            st.success(f"🎉 ประมวลผลสำเร็จ {len(processed_df)} รายการ")
+        # ✅ อัปเดตผลลัพธ์ใน session
+        processed_df = pd.DataFrame(output_rows)
+        st.session_state["processed"] = True
+        st.session_state["processed_df"] = processed_df
+        st.session_state["is_processing"] = False
+
+        st.success(f"🎉 ประมวลผลสำเร็จ {len(processed_df)} รายการ")
+
+        if errors:
+            st.warning(f"⚠️ มี {len(errors)} รายการที่ประมวลผลไม่สำเร็จ")
+            with st.expander("🔍 ดูรายละเอียดข้อผิดพลาด"):
+                for rec_id, msg in errors:
+                    st.write(f"- `{rec_id}`: {msg}")
 
 
     # สร้างปุ่มให้ดาวน์โหลดไฟล์ผลลัพธ์ที่ประมวลผลแล้วในรูปแบบ CSV เมื่อประมวลผลเสร็จ
