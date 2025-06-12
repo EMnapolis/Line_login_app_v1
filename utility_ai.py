@@ -215,3 +215,58 @@ def display_ai_response_info(model_choice, base_messages, stream_output):
     )
 
     return result
+
+
+# 🧠 ฟังก์ชันตรวจสอบ token quota
+def check_token_quota():
+    from utility_chat import init_db
+
+    conn, cursor = init_db()
+    current_user = st.session_state.get("user_id", "")
+    role = st.session_state.get("role", "").lower()
+
+    # ✅ ดึงรวม Token ที่ใช้
+    cursor.execute(
+        """
+        SELECT SUM(total_tokens) FROM token_usage
+        WHERE user_id = ?
+        """,
+        (current_user,),
+    )
+    used_token = cursor.fetchone()[0] or 0
+
+    # ✅ ดึง quota override ล่าสุดจาก DB
+    cursor.execute(
+        """
+        SELECT quota_override FROM token_usage
+        WHERE user_id = ? AND quota_override IS NOT NULL
+        ORDER BY id DESC LIMIT 1
+        """,
+        (current_user,),
+    )
+    quota_row = cursor.fetchone()
+    quota_limit = quota_row[0] if quota_row else 1_000_000  # DEFAULT_QUOTA fallback
+
+    # ✅ คำนวณ % ที่ใช้แล้ว
+    percent_used = round((used_token / quota_limit) * 100, 2)
+
+    # ⚠️ แจ้งเตือนเมื่อเกิน 90%
+    if percent_used >= 90 and used_token < quota_limit:
+        st.warning(
+            f"""
+            ⚠️ คุณใช้ Token ไปแล้ว {percent_used}%  
+            🔢 ใช้ไป: `{used_token:,}` จากโควต้า `{quota_limit:,}` Tokens  
+            🧭 กรุณาวางแผนการใช้งานให้เหมาะสม
+            """
+        )
+
+    # ❌ หยุดใช้งานหากเกินโควต้า
+    if used_token >= quota_limit and role not in ["admin", "super admin"]:
+        st.error(
+            f"""
+            ❌ คุณใช้ Token เกินโควต้าที่กำหนดแล้ว  
+            🔢 ใช้ไป: `{used_token:,}` จากโควต้า `{quota_limit:,}` Tokens  
+            🛑 กรุณาติดต่อผู้ดูแลระบบเพื่อขอเพิ่มโควต้า หรือรอรอบใหม่
+            """
+        )
+        st.stop()

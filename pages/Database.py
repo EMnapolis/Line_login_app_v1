@@ -235,7 +235,7 @@ elif menu == "ตรวจสอบ/จัดการ Token":
         step=100_000,
     )
 
-    if st.button("✅ บันทึก quota ใหม่ใหม่"):
+    if st.button("✅ บันทึก quota ใหม่"):
         try:
             now = pd.Timestamp.now().isoformat()
             cursor.execute(
