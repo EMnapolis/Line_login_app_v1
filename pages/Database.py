@@ -57,7 +57,7 @@ def fetch_table(table_name):
 def summarize_token_usage(user_id=None, default_quota=1_000_000):
     conn, cursor = init_db()
 
-    # ✅ โหลดรายการการใช้ token
+    # ✅ ดึงข้อมูล token usage
     query = """
         SELECT user_id, model,
                SUM(prompt_tokens) AS prompt_tokens,
@@ -87,11 +87,11 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
         ],
     )
 
-    # ✅ รวม total token ที่ใช้จริงต่อ user
+    # ✅ รวมยอด token ต่อ user
     usage_df = df.groupby("user_id", as_index=False)["total_tokens"].sum()
     usage_df = usage_df.rename(columns={"total_tokens": "รวม Token ที่ใช้"})
 
-    # ✅ ดึง quota override จาก token_usage (ใช้ row ล่าสุดของแต่ละ user ที่มี quota_override)
+    # ✅ ดึง quota override จาก record ล่าสุดของแต่ละ user ที่มี quota_override
     cursor.execute(
         """
         SELECT user_id, quota_override
@@ -102,10 +102,26 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
             WHERE quota_override IS NOT NULL
             GROUP BY user_id
         )
-    """
+        """
     )
     quota_rows = cursor.fetchall()
     quota_dict = {uid: quota for uid, quota in quota_rows}
+
+    # ✅ เพิ่มคอลัมน์ quota และ token คงเหลือ
+    usage_df["โควตา Token"] = usage_df["user_id"].apply(
+        lambda uid: quota_dict.get(uid, default_quota)
+    )
+    usage_df["Token คงเหลือ"] = usage_df["โควตา Token"] - usage_df["รวม Token ที่ใช้"]
+    usage_df["% ที่ใช้แล้ว"] = (
+        usage_df["รวม Token ที่ใช้"] / usage_df["โควตา Token"] * 100
+    ).round(2)
+
+    # ✅ แสดงผล
+    st.dataframe(usage_df, use_container_width=True)
+
+    with st.expander("📊 กราฟรวม Token ที่ใช้ (TOP 10)", expanded=False):
+        top10 = usage_df.sort_values(by="รวม Token ที่ใช้", ascending=False).head(10)
+        st.bar_chart(top10.set_index("user_id")["รวม Token ที่ใช้"])
 
     # ✅ คำนวณโควตา → คงเหลือ → เปอร์เซ็นต์
     def get_quota(uid):
@@ -145,6 +161,7 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
         )
     )
     st.altair_chart(chart, use_container_width=True)
+
 
 # 🗂 Table list
 TABLES = {
@@ -210,80 +227,104 @@ if menu == "📊 ข้อมูลจากฐานข้อมูล":
         )
 
 # ✅ Token adjustment UI
-# ✅ ส่วนที่ต้องแก้ใน Token Adjustment UI: ปรับให้บันทึก quota_override ลงใน DB
-
 elif menu == "ตรวจสอบ/จัดการ Token":
     st.header("🛠 จัดการ Token ของผู้ใช้")
-
     conn, cursor = init_db()
 
-    # 1. ดึง user_id ที่เคยบนใน token_usage
+    # ────────────────
+    # 🔹 1. ตั้งค่าโควตา Token
+    # ────────────────
+    st.subheader("🌟 กำหนดโควตา Token")
+
     cursor.execute("SELECT DISTINCT user_id FROM token_usage ORDER BY user_id")
     user_ids = [row[0] for row in cursor.fetchall()]
 
-    st.subheader("🌟 กำหนดโควตา Token")
-    selected_quota_user = st.selectbox(
-        "เลือกผู้ใช้ที่ต้องการตั้งโควตา",
-        user_ids,
-        key="quota_user_selectbox",
-    )
-
-    new_quota = st.number_input(
-        "🔄 กำหนด quota ใหม่ (ใส่จำนวนใหม่หรือลดก็ได้)",
-        min_value=0,
-        value=1_000_000,
-        step=100_000,
-    )
-
-    if st.button("✅ บันทึก quota ใหม่"):
-        try:
-            now = pd.Timestamp.now().isoformat()
-            cursor.execute(
-                """
-                INSERT INTO token_usage (user_id, model, prompt_tokens, completion_tokens, total_tokens, quota_override, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    selected_quota_user,
-                    "quota",  # model = quota
-                    0, 0, 0,
-                    new_quota,
-                    now,
-                ),
-            )
-            conn.commit()
-            st.success(f"🌟 ปรับ quota ใหม่เป็น {new_quota:,} tokens ให้ `{selected_quota_user}` สำเร็จ")
-        except Exception as e:
-            st.error(f"❌ เกิดข้อผิด: {e}")
-
-    # 📅 รายงาน token รายวัน
-    st.markdown("---")
-    st.subheader("📅 ประวัติการใช้ Token รายวัน")
-
-    selected_user = st.selectbox("เลือกผู้ใช้ที่ต้องการดูรายงาน", user_ids, key="user_token_daily")
-
-    cursor.execute(
-        """
-        SELECT DATE(created_at) AS วัน, SUM(total_tokens) AS tokens
-        FROM token_usage
-        WHERE user_id = ?
-        GROUP BY DATE(created_at)
-        ORDER BY DATE(created_at) DESC
-        """,
-        (selected_user,)
-    )
-    daily_data = cursor.fetchall()
-    if daily_data:
-        df_daily = pd.DataFrame(daily_data, columns=["วันที่", "รวม Token ที่ใช้"])
-        st.dataframe(df_daily, use_container_width=True)
-        st.bar_chart(df_daily.set_index("วันที่"))
+    if not user_ids:
+        st.info("⚠️ ยังไม่มีข้อมูลผู้ใช้ในระบบ token_usage")
     else:
-        st.info("ยังไม่มีข้อมูล Token Usage รายวันสำหรับผู้ใช้นี้")
+        selected_quota_user = st.selectbox(
+            "เลือกผู้ใช้ที่ต้องการตั้งโควตา",
+            user_ids,
+            key="quota_user_selectbox",
+        )
 
+        new_quota = st.number_input(
+            "🔄 กำหนด quota ใหม่ (ใส่จำนวนใหม่หรือลดก็ได้)",
+            min_value=0,
+            value=1_000_000,
+            step=100_000,
+        )
 
+        if st.button("✅ บันทึก quota ใหม่"):
+            try:
+                now = pd.Timestamp.now().isoformat()
+                cursor.execute(
+                    """
+                    INSERT INTO token_usage (
+                        user_id, model, prompt_tokens, completion_tokens, total_tokens,
+                        quota_override, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        selected_quota_user,
+                        "quota",  # 📌 ใช้ model='quota' เพื่อบ่งชี้ว่าเป็นบรรทัด quota override
+                        0,
+                        0,
+                        0,
+                        new_quota,
+                        now,
+                    ),
+                )
+                conn.commit()
+                st.success(
+                    f"🌟 ปรับ quota ใหม่เป็น {new_quota:,} tokens ให้ `{selected_quota_user}` สำเร็จ"
+                )
+            except Exception as e:
+                st.error(f"❌ เกิดข้อผิด: {e}")
+
+    # ────────────────
+    # 📅 2. รายงาน token รายวัน
+    # ────────────────
     st.markdown("---")
-    with st.expander("📊 รวม Token Usage Summary"):
-        summarize_token_usage()
+    st.subheader("📅 รายงานการใช้ Token รายวัน")
+
+    # 🔁 refresh user_ids อีกครั้งเผื่อมีการเพิ่มจาก quota ด้านบน
+    user_ids = [r[0] for r in get_token_usage_summary(cursor)]
+    if not user_ids:
+        st.info("⚠️ ยังไม่มีข้อมูล token usage")
+    else:
+        selected_user = st.selectbox("เลือกผู้ใช้", user_ids, key="user_token_daily")
+
+        cursor.execute(
+            """
+            SELECT DATE(created_at) AS วัน, SUM(total_tokens) AS tokens
+            FROM token_usage
+            WHERE user_id = ?
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at) DESC
+            """,
+            (selected_user,),
+        )
+        daily_data = cursor.fetchall()
+
+        if daily_data:
+            df_daily = pd.DataFrame(daily_data, columns=["วันที่", "รวม Token ที่ใช้"])
+            st.dataframe(df_daily, use_container_width=True)
+            st.bar_chart(df_daily.set_index("วันที่"))
+        else:
+            st.info("📭 ยังไม่มีข้อมูล Token รายวันสำหรับผู้ใช้นี้")
+
+    # ────────────────
+    # 📊 3. Token Usage Summary
+    # ────────────────
+    st.markdown("---")
+    st.subheader("📊 สรุปภาพรวมการใช้ Token")
+
+    usage_df = summarize_token_usage()
+    if usage_df is not None:
+        with st.expander("📈 กราฟรวม Token ที่ใช้ (TOP 10)", expanded=False):
+            top10 = usage_df.sort_values(by="รวม Token ที่ใช้", ascending=False).head(10)
+            st.bar_chart(top10.set_index("user_id")["รวม Token ที่ใช้"])
 
 # 💾 Backup / Restore
 elif menu == "Backup/Restore db":

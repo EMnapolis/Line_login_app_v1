@@ -370,9 +370,9 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-            with st.expander("📂 ขยายเพื่ออัปโหลดไฟล์ (txt, csv, xlsx)", expanded=False):
+            with st.expander("📂 อัปโหลดไฟล์ (ไม่บังคับ)", expanded=False):
                 uploaded_files = st.file_uploader(
-                    "อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt",
+                    "อัปโหลดไฟล์ (.txt, .csv, .xlsx) เพื่อใช้ร่วมกับ Prompt (ถ้ามี)",
                     type=["txt", "csv", "xlsx"],
                     accept_multiple_files=True,
                 )
@@ -400,146 +400,103 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 st.session_state["file_content"] = file_content_all
 
                 if st.button("🔍 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก"):
-                    try:
-                        file_content = st.session_state.get("file_content", "")
-                        full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"
-                        base_messages = [
-                            {"role": "system", "content": selected_prompt},
-                            {"role": "user", "content": full_input},
-                        ]
+                    file_content = st.session_state.get("file_content", "")
+                    prompt_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"
 
-                        with st.chat_message("assistant"):
-                            stream_output = st.empty()
-                            result = display_ai_response_info(
-                                model_choice, base_messages, stream_output
-                            )
+                    base_messages = [
+                        {"role": "system", "content": selected_prompt},
+                        {"role": "user", "content": prompt_input},
+                    ]
 
-                        reply = result["reply"]
-                        raw_json = result["response_json"]
-
-                        st.session_state["chat_all_in_one"].append(
-                            {"role": "assistant", "content": reply}
-                        )
-                        st.session_state["analysis_result"] = reply
-                        st.session_state["show_download"] = False
-
-                        st.session_state["messages_prompt"] = base_messages + [
-                            {
-                                "role": "assistant",
-                                "content": reply,
-                                "prompt_tokens": result["prompt_tokens"],
-                                "completion_tokens": result["completion_tokens"],
-                                "total_tokens": result["total_tokens"],
-                                "response_json": raw_json,
-                            }
-                        ]
-
-                        conv_id = save_conversation_if_ready(
-                            conn,
-                            cursor,
-                            "messages_prompt",
-                            model_choice,
-                            result["prompt_tokens"],
-                            result["completion_tokens"],
-                            result["total_tokens"],
+                    with st.chat_message("assistant"):
+                        stream_output = st.empty()
+                        result = display_ai_response_info(
+                            model_choice, base_messages, stream_output
                         )
 
-                        if "conversation_title" not in st.session_state:
-                            from utility_ai import generate_title_from_conversation
+                    reply = result["reply"]
+                    raw_json = result["response_json"]
 
-                            title = generate_title_from_conversation(
-                                st.session_state["messages_prompt"]
-                            )
-                            st.session_state["conversation_title"] = title
-                            if conv_id:
-                                try:
-                                    cursor.execute(
-                                        "UPDATE conversations SET title = ? WHERE id = ?",
-                                        (title, conv_id),
-                                    )
-                                    conn.commit()
-                                except Exception as e:
-                                    st.warning(f"⚠️ ไม่สามารถบันทึก title ได้: {e}")
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาด: {e}")
+                    st.session_state["chat_all_in_one"].append(
+                        {"role": "assistant", "content": reply}
+                    )
+                    st.session_state["analysis_result"] = reply
+                    st.session_state["show_download"] = False
 
+                    st.session_state["messages_prompt"] = base_messages + [
+                        {
+                            "role": "assistant",
+                            "content": reply,
+                            "prompt_tokens": result["prompt_tokens"],
+                            "completion_tokens": result["completion_tokens"],
+                            "total_tokens": result["total_tokens"],
+                            "response_json": raw_json,
+                        }
+                    ]
+
+                    save_conversation_if_ready(
+                        conn,
+                        cursor,
+                        messages_key="messages_prompt",
+                        source=model_choice,
+                        prompt_tokens=result["prompt_tokens"],
+                        completion_tokens=result["completion_tokens"],
+                        total_tokens=result["total_tokens"],
+                    )
+
+            # ✅ พร้อมแชทต่อ
             if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
                 st.session_state["chat_all_in_one"].append(
                     {"role": "user", "content": prompt}
                 )
 
-                if prompt.strip() == "ขอไฟล์" or (
-                    "save" in prompt.lower() and st.session_state.get("analysis_result")
-                ):
-                    st.chat_message("assistant").write(
-                        "📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์"
+                file_content = st.session_state.get("file_content", "")
+                prompt_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt}"
+
+                base_messages = [
+                    {"role": "system", "content": selected_prompt},
+                    {"role": "user", "content": prompt_input},
+                ]
+
+                with st.chat_message("assistant"):
+                    stream_output = st.empty()
+                    result = display_ai_response_info(
+                        model_choice, base_messages, stream_output
                     )
-                    st.session_state["show_download"] = True
-                else:
-                    try:
-                        file_content = st.session_state.get("file_content", "")
-                        full_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{file_content}"
-                        base_messages = [
-                            {"role": "system", "content": selected_prompt},
-                            {"role": "user", "content": full_input},
-                        ]
 
-                        with st.chat_message("assistant"):
-                            stream_output = st.empty()
-                            result = display_ai_response_info(
-                                model_choice, base_messages, stream_output
-                            )
+                reply = result["reply"]
+                raw_json = result["response_json"]
 
-                        reply = result["reply"]
-                        raw_json = result["response_json"]
+                st.session_state["chat_all_in_one"].append(
+                    {"role": "assistant", "content": reply}
+                )
+                st.session_state["analysis_result"] = reply
+                st.session_state["show_download"] = False
 
-                        st.session_state["chat_all_in_one"].append(
-                            {"role": "assistant", "content": reply}
-                        )
-                        st.session_state["analysis_result"] = reply
-                        st.session_state["show_download"] = False
+                st.session_state["messages_prompt"] = base_messages + [
+                    {
+                        "role": "assistant",
+                        "content": reply,
+                        "prompt_tokens": result["prompt_tokens"],
+                        "completion_tokens": result["completion_tokens"],
+                        "total_tokens": result["total_tokens"],
+                        "response_json": raw_json,
+                    }
+                ]
 
-                        st.session_state["messages_gpt"] = base_messages + [
-                            {
-                                "role": "assistant",
-                                "content": reply,
-                                "prompt_tokens": result["prompt_tokens"],
-                                "completion_tokens": result["completion_tokens"],
-                                "total_tokens": result["total_tokens"],
-                                "response_json": raw_json,
-                            }
-                        ]
+                save_conversation_if_ready(
+                    conn,
+                    cursor,
+                    messages_key="messages_prompt",
+                    source=model_choice,
+                    prompt_tokens=result["prompt_tokens"],
+                    completion_tokens=result["completion_tokens"],
+                    total_tokens=result["total_tokens"],
+                )
 
-                        conv_id = save_conversation_if_ready(
-                            conn,
-                            cursor,
-                            "messages_gpt",
-                            model_choice,
-                            result["prompt_tokens"],
-                            result["completion_tokens"],
-                            result["total_tokens"],
-                        )
+                show_download_section()
 
-                        if "conversation_title" not in st.session_state:
-                            from utility_ai import generate_title_from_conversation
-
-                            title = generate_title_from_conversation(
-                                st.session_state["messages_gpt"]
-                            )
-                            st.session_state["conversation_title"] = title
-                            if conv_id:
-                                try:
-                                    cursor.execute(
-                                        "UPDATE conversations SET title = ? WHERE id = ?",
-                                        (title, conv_id),
-                                    )
-                                    conn.commit()
-                                except Exception as e:
-                                    st.warning(f"⚠️ ไม่สามารถบันทึก title ได้: {e}")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-            show_download_section()
         else:
             st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✨ บันทึก / จัดการ Prompt'")
 

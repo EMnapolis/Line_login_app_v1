@@ -101,7 +101,7 @@ def stream_response_by_model(model_name, messages, stream_output):
         st.session_state["stop_chat"] = False
 
         raw_json = {
-            "model": model_name,
+            "model": "gpt-4o",
             "chunks": chunks,
             "full_reply": reply,
         }

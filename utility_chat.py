@@ -1,4 +1,4 @@
-# utility.py
+#utility_chat.py
 import streamlit as st
 import os
 import sqlite3
@@ -499,7 +499,7 @@ def call_openai_with_parsing(full_input, system_prompt):
     ]
 
     response = client.chat.completions.create(
-        model="model_name",
+        model="gpt-4o",
         messages=base_messages
     )
 
