@@ -114,7 +114,7 @@ if "user_id" not in st.session_state or st.session_state.get("status") != "APPRO
 #---------------
 # เริ่มต้น Fontend
 #---------------
-st.set_page_config(page_title="Google STT", layout="wide")
+st.set_page_config(page_title="Google STT", page_icon="🌐", layout="wide")
 
 # Header ด้านบนขวา
 st.markdown("""
@@ -132,20 +132,6 @@ menu = st.sidebar.radio("เลือกเมนู", ["🖥 หน้าต่
 if menu == "🖥 หน้าต่างทำงาน":
     # Main Title
     st.title("🌐 Google Speech-to-Text")
-
-    # # ---------------------
-    # # Step 1: Browse Credential JSON
-    # # ---------------------
-    # # st.markdown("<small><b>ขยายเพื่อแก้ไข Credential (Google JSON)</b></small>", unsafe_allow_html=True)
-    # with st.expander("ขยายเพื่อแก้ไข Credential (Google JSON)", expanded=False):
-    #     st.subheader("🔐 เลือกไฟล์ Credential (Google JSON)")
-    #     json_file = st.file_uploader("เลือกไฟล์ .json", type="json")
-
-    #     if json_file:
-    #         json_path = f"temp_cred.json"
-    #         with open(json_path, "wb") as f:
-    #             f.write(json_file.getbuffer())
-    #         st.success(f"โหลด Credential สำเร็จ: {json_file.name}")
 
     col1, col2 = st.columns(2)  # แบ่งคอลัมน์ให้เลือกวันที่แบบคู่
     with col1:

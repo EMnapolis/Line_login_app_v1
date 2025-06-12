@@ -16,5 +16,6 @@ protobuf==3.20.3
 openpyxl
 google-cloud-speech
 google-auth
+google-cloud-translate
 XlsxWriter
 #
