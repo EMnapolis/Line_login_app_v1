@@ -246,19 +246,40 @@ elif menu == "ตรวจสอบ/จัดการ Token":
                 (
                     selected_quota_user,
                     "quota",  # model = quota
-                    0,
-                    0,
-                    0,
+                    0, 0, 0,
                     new_quota,
                     now,
                 ),
             )
             conn.commit()
-            st.success(
-                f"🌟 ปรับ quota ใหม่เป็น {new_quota:,} tokens ให้ `{selected_quota_user}` สำเร็จ"
-            )
+            st.success(f"🌟 ปรับ quota ใหม่เป็น {new_quota:,} tokens ให้ `{selected_quota_user}` สำเร็จ")
         except Exception as e:
             st.error(f"❌ เกิดข้อผิด: {e}")
+
+    # 📅 รายงาน token รายวัน
+    st.markdown("---")
+    st.subheader("📅 ประวัติการใช้ Token รายวัน")
+
+    selected_user = st.selectbox("เลือกผู้ใช้ที่ต้องการดูรายงาน", user_ids, key="user_token_daily")
+
+    cursor.execute(
+        """
+        SELECT DATE(created_at) AS วัน, SUM(total_tokens) AS tokens
+        FROM token_usage
+        WHERE user_id = ?
+        GROUP BY DATE(created_at)
+        ORDER BY DATE(created_at) DESC
+        """,
+        (selected_user,)
+    )
+    daily_data = cursor.fetchall()
+    if daily_data:
+        df_daily = pd.DataFrame(daily_data, columns=["วันที่", "รวม Token ที่ใช้"])
+        st.dataframe(df_daily, use_container_width=True)
+        st.bar_chart(df_daily.set_index("วันที่"))
+    else:
+        st.info("ยังไม่มีข้อมูล Token Usage รายวันสำหรับผู้ใช้นี้")
+
 
     st.markdown("---")
     with st.expander("📊 รวม Token Usage Summary"):

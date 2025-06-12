@@ -80,7 +80,9 @@ def save_conversation_if_ready(
     messages_key="messages_gpt",
     source="chat_gpt",
     title=None,
-    **token_usage,
+    prompt_tokens=0,
+    completion_tokens=0,
+    total_tokens=0,
 ):
     import streamlit as st
 
@@ -101,7 +103,7 @@ def save_conversation_if_ready(
         try:
             cursor.execute(
                 "UPDATE conversations SET title = ? WHERE id = ?",
-                (title.strip(), conv_id),
+                (str(title).strip(), conv_id),
             )
             conn.commit()
             st.toast("✏️ เปลี่ยนชื่อบทสนทนาเรียบร้อยแล้ว", icon="✅")
@@ -132,9 +134,9 @@ def save_conversation_if_ready(
                         user_id,
                         title,
                         source,
-                        token_usage.get("prompt_tokens", 0),
-                        token_usage.get("completion_tokens", 0),
-                        token_usage.get("total_tokens", 0),
+                        prompt_tokens,
+                        completion_tokens,
+                        total_tokens,
                     ),
                 )
                 conv_id = cursor.lastrowid
@@ -183,9 +185,9 @@ def save_conversation_if_ready(
                     cursor,
                     user_id,
                     source,
-                    token_usage.get("prompt_tokens", 0),
-                    token_usage.get("completion_tokens", 0),
-                    token_usage.get("total_tokens", 0),
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens,
                 )
 
                 conn.commit()
@@ -197,6 +199,7 @@ def save_conversation_if_ready(
                 return None
 
     return conv_id
+
 
 #
 def log_token_usage(

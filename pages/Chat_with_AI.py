@@ -252,7 +252,7 @@ if tab_choice == "💬 สนทนากับ GPT":
             {
                 "role": "user",
                 "content": prompt,
-                "token_count": token_fn(prompt, model_choice),
+                # "token_count": token_fn(prompt, model_choice),
             }
         )
 
