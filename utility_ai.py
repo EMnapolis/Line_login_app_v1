@@ -1,44 +1,54 @@
 # utility_ai.py
-from utility_chat import *
+import json
+import os
 import requests
 import subprocess
+from utility_chat import *
 
-# เชื่อมต่อ SQLite
+# Initialize SQLite connection
 conn, cursor = init_db()
 initialize_schema(conn)
-# ==== AI KEY ====
 
-# API / Auth
+# ===== API / Auth configuration =====
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI")
 STATE = os.getenv("STATE")
 CHAT_TOKEN = os.getenv("CHAT_TOKEN")
 
-# Logging
+# Logging configuration
 ACCESS_LOG_FILE = os.getenv("ACCESS_LOG_FILE", "access_log.txt")
 
-# AI Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # ✅ ใช้ชื่อให้ตรงกัน
+# AI Keys configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Ensure environment variable is set
 OLLAMA_SERVER_URL = os.getenv("OLLAMA_SERVER_URL")
 
-# ========== ฟังก์ชันนับ Token ==========
+
+# ===== Function to count tokens =====
 def count_tokens(text, model="gpt-4o"):
+    """
+    Counts the number of tokens in a given text for a specified model.
+    """
     try:
         encoding = tiktoken.encoding_for_model(model)
     except Exception:
         encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text))
 
+
 def estimate_tokens(text: str, model: str = None) -> int:
+    """
+    Estimates the number of tokens based on the number of words in the text.
+    """
     words = len(text.split())
     return int(words / 0.75)
 
 
-# ========== รวมข้อความจาก stream ของ LLaMA ==========
+# ===== Function to parse LLaMA stream response =====
 def parse_llama_stream_response(res):
-    import json
-
+    """
+    Parse and decode a JSON stream response from LLaMA.
+    """
     reply = ""
     raw_chunks = []
     decoder = json.JSONDecoder()
@@ -47,14 +57,11 @@ def parse_llama_stream_response(res):
         if line:
             try:
                 line_str = line.decode("utf-8").strip()
-
-                # กรณีมีหลาย JSON object ต่อบรรทัด
                 while line_str:
                     obj, idx = decoder.raw_decode(line_str)
                     raw_chunks.append(obj)
                     reply += obj.get("response", "")
                     line_str = line_str[idx:].lstrip()
-
             except Exception as e:
                 print("❌ Error decoding JSON chunk:", e)
                 continue
@@ -62,22 +69,18 @@ def parse_llama_stream_response(res):
     return reply, {"chunks": raw_chunks, "full_reply": reply}
 
 
-# ========== ฟังก์ชันเรียกโมเดลตามชื่อ ==========
+# ===== Function to stream responses based on model =====
 def stream_response_by_model(model_name, messages, stream_output):
     """
-    รองรับ GPT (OpenAI), Ollama (LLaMA/Mistral/etc.), และ fallback
-    คืนค่า dict พร้อมข้อมูลบทสนทนาและ token usage
+    Streams responses from models like GPT (OpenAI) or Ollama based on the model name.
     """
-    import json, os, requests
-    from openai import OpenAI
-
     reply = ""
     raw_json = {}
     prompt_tokens = 0
     completion_tokens = 0
     total_tokens = 0
 
-    # ========== GPT MODELS ==========
+    # ===== GPT Models Response =====
     if model_name.startswith("gpt-"):
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
@@ -86,10 +89,11 @@ def stream_response_by_model(model_name, messages, stream_output):
             stream=True,
         )
 
+        # Stream the response
         chunks = []
         for chunk in response:
             if st.session_state.get("stop_chat", False):
-                stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
+                stream_output.markdown("🛑 Stopped displaying.")
                 break
             chunks.append(chunk.model_dump())
             if chunk.choices and chunk.choices[0].delta.content:
@@ -112,8 +116,8 @@ def stream_response_by_model(model_name, messages, stream_output):
         completion_tokens = count_tokens(reply, model=model_name)
         total_tokens = prompt_tokens + completion_tokens
 
-    # ========== OLLAMA MODELS ==========
-    elif True:  # Fallback สำหรับโมเดลใดๆ ที่ไม่ใช่ GPT
+    # ===== OLLAMA Models Response =====
+    else:
         llama_server = os.getenv(
             "OLLAMA_SERVER_API", "http://localhost:11434/api/generate"
         )
@@ -129,26 +133,9 @@ def stream_response_by_model(model_name, messages, stream_output):
                 stream=True,
             )
 
-            reply = ""
-            raw_chunks = []
-            decoder = json.JSONDecoder()
-
-            for line in res.iter_lines():
-                if st.session_state.get("stop_chat", False):
-                    stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
-                    break
-                if line:
-                    try:
-                        line_str = line.decode("utf-8").strip()
-                        while line_str:
-                            obj, idx = decoder.raw_decode(line_str)
-                            raw_chunks.append(obj)
-                            reply += obj.get("response", "")
-                            line_str = line_str[idx:].lstrip()
-                            stream_output.markdown(reply + "▌", unsafe_allow_html=True)
-                    except Exception as e:
-                        print("❌ Error decoding JSON chunk:", e)
-
+            # Stream and parse the response
+            reply, raw_chunks = parse_llama_stream_response(res)
+            reply += parse_llama_stream_response(res)
             stream_output.markdown(reply)
             st.session_state["stop_chat"] = False
 
@@ -163,7 +150,7 @@ def stream_response_by_model(model_name, messages, stream_output):
             total_tokens = prompt_tokens + completion_tokens
 
         except Exception as e:
-            stream_output.markdown(f"❌ ไม่สามารถเชื่อมต่อกับ Ollama ได้: {e}")
+            stream_output.markdown(f"❌ Unable to connect to Ollama: {e}")
             return {
                 "reply": "",
                 "prompt_tokens": 0,
@@ -181,26 +168,28 @@ def stream_response_by_model(model_name, messages, stream_output):
     }
 
 
+# ===== Function to get list of available Ollama models =====
 def get_ollama_models():
+    """
+    Fetches the list of available models from the Ollama server.
+    """
     try:
         response = requests.get(f"{OLLAMA_SERVER_URL}/api/tags")
         response.raise_for_status()
         data = response.json()
         return [m["name"] for m in data.get("models", [])]
     except Exception as e:
-        print(f"❌ ไม่สามารถดึงรายชื่อโมเดลจาก Ollama ได้: {e}")
+        print(f"❌ Unable to fetch model list from Ollama: {e}")
         return []
 
 
+# ===== Display AI response information =====
 def display_ai_response_info(model_choice, base_messages, stream_output):
     """
-    เรียก model แล้วแสดงผล พร้อมข้อมูล tokens, model และเวลาใช้
-    ส่งคืน result["reply"] ด้วย
+    Calls the model and displays its response along with token usage, model, and the time taken.
     """
     start_time = time.time()
-
     result = stream_response_by_model(model_choice, base_messages, stream_output)
-
     end_time = time.time()
     duration = round(end_time - start_time, 2)
 
@@ -208,65 +197,64 @@ def display_ai_response_info(model_choice, base_messages, stream_output):
     stream_output.markdown(reply)
 
     st.caption(
-        f"📌 ใช้โมเดล: `{model_choice}` | "
+        f"📌 Model used: `{model_choice}` | "
         f"Tokens: Prompt = {result['prompt_tokens']}, Completion = {result['completion_tokens']}, "
-        f"รวม = {result['total_tokens']} | "
-        f"⏱️ ใช้เวลา {duration} วินาที"
+        f"Total = {result['total_tokens']} | "
+        f"⏱️ Time taken: {duration} seconds"
     )
 
     return result
 
 
-# 🧠 ฟังก์ชันตรวจสอบ token quota
+# ===== Function to check token quota =====
 def check_token_quota():
+    """
+    Checks the user's token usage and warns if nearing the limit.
+    """
     from utility_chat import init_db
 
     conn, cursor = init_db()
     current_user = st.session_state.get("user_id", "")
     role = st.session_state.get("role", "").lower()
 
-    # ✅ ดึงรวม Token ที่ใช้
+    # Fetch total token usage
     cursor.execute(
         """
         SELECT SUM(total_tokens) FROM token_usage
         WHERE user_id = ?
-        """,
+    """,
         (current_user,),
     )
     used_token = cursor.fetchone()[0] or 0
 
-    # ✅ ดึง quota override ล่าสุดจาก DB
+    # Fetch latest quota override from DB
     cursor.execute(
         """
         SELECT quota_override FROM token_usage
         WHERE user_id = ? AND quota_override IS NOT NULL
         ORDER BY id DESC LIMIT 1
-        """,
+    """,
         (current_user,),
     )
     quota_row = cursor.fetchone()
-    quota_limit = quota_row[0] if quota_row else 1_000_000  # DEFAULT_QUOTA fallback
+    quota_limit = quota_row[0] if quota_row else 1_000_000  # Default Quota Fallback
 
-    # ✅ คำนวณ % ที่ใช้แล้ว
+    # Calculate used percentage
     percent_used = round((used_token / quota_limit) * 100, 2)
 
-    # ⚠️ แจ้งเตือนเมื่อเกิน 90%
+    # Warn when usage exceeds 90%
     if percent_used >= 90 and used_token < quota_limit:
         st.warning(
-            f"""
-            ⚠️ คุณใช้ Token ไปแล้ว {percent_used}%  
-            🔢 ใช้ไป: `{used_token:,}` จากโควต้า `{quota_limit:,}` Tokens  
-            🧭 กรุณาวางแผนการใช้งานให้เหมาะสม
-            """
+            f"⚠️ You have used {percent_used}% of your tokens.\n"
+            f"🔢 Usage: `{used_token:,}` out of `{quota_limit:,}` tokens.\n"
+            f"🧭 Please plan your usage accordingly."
         )
 
-    # ❌ หยุดใช้งานหากเกินโควต้า
+    # Stop usage if quota exceeded
     if used_token >= quota_limit and role not in ["admin", "super admin"]:
         st.error(
-            f"""
-            ❌ คุณใช้ Token เกินโควต้าที่กำหนดแล้ว  
-            🔢 ใช้ไป: `{used_token:,}` จากโควต้า `{quota_limit:,}` Tokens  
-            🛑 กรุณาติดต่อผู้ดูแลระบบเพื่อขอเพิ่มโควต้า หรือรอรอบใหม่
-            """
+            f"❌ You have exceeded your token quota.\n"
+            f"🔢 Usage: `{used_token:,}` out of `{quota_limit:,}` tokens.\n"
+            f"🛑 Please contact your administrator to request additional quota or wait for the next cycle."
         )
         st.stop()

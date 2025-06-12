@@ -69,13 +69,31 @@ with st.sidebar:
         "เลือกเมนู",
         ["💬 สนทนากับ GPT", "🧠 สนทนากับ Prompt", "📜 ประวัติการสนทนา", "📘 วิธีการใช้งาน"],
     )
+    # ────────────────
+    # 🛠 ปุ่มจัดการระบบ (ใน Sidebar)
+    # ────────────────
+    st.markdown("---")
+    st.markdown("### 🛠 ควบคุมการสนทนา")
 
     # ✅ ปุ่มหยุดการทำงานของ AI
-    st.markdown("---")
     if st.button("⛔ หยุดการทำงาน", key="stop_button_sidebar"):
         st.session_state["stop_chat"] = True
         st.warning("🛑 หยุดการทำงานของ AI แล้ว")
 
+    # ✅ ปุ่มเริ่มต้นใหม่
+    if st.button("🆕 เริ่มต้นบทสนทนาใหม่", key="reset_button_sidebar"):
+        for key in [
+            "chat_all_in_one",
+            "messages_prompt",
+            "analysis_result",
+            "file_content",
+            "conversation_title",
+            "uploaded_filename",
+            "tab_last",
+            "model_last",
+        ]:
+            st.session_state.pop(key, None)
+        st.rerun()
     # ======= ดู Token ที่ใช้แต่ละคน =======
     st.markdown("---")
     with st.expander("📊 Token ที่ใช้และคงเหลือของคุณ", expanded=False):
@@ -175,18 +193,6 @@ with st.expander("⚙️ ตั้งค่าโมเดลเริ่มต�
 model_choice = st.session_state["default_model"]
 
 st.markdown(f"✅ **โมเดลที่ใช้งานขณะนี้:** `{model_choice}`", unsafe_allow_html=True)
-
-if st.button("🆕 เริ่มต้นบทสนทนาใหม่"):
-    for key in [
-        "chat_all_in_one",
-        "messages_prompt",
-        "analysis_result",
-        "file_content",
-        "conversation_title",
-        "uploaded_filename",
-    ]:
-        st.session_state.pop(key, None)
-    st.rerun()
 
 # ตรวจจับการเปลี่ยนแท็บ
 reset_tab(tab_choice, model_choice)

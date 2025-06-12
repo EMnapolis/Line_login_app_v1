@@ -1,4 +1,4 @@
-#utility_chat.py
+# utility_chat.py
 import streamlit as st
 import os
 import sqlite3
@@ -560,6 +560,7 @@ def process_uploaded_files_for_prompt(uploaded_files):
     st.session_state["file_content"] = "\n\n".join(all_contents)
     st.success("✅ โหลดเนื้อหาไฟล์ทั้งหมดเรียบร้อยแล้ว")
 
+
 # 📥 ปุ่มดาวน์โหลดผลลัพธ์ AI (txt / md)
 def show_download_section():
     if st.session_state.get("show_download"):
@@ -576,33 +577,24 @@ def show_download_section():
         full_filename = f"{file_name.strip()}.{file_format}"
         file_bytes = BytesIO()
 
-        # ▶️ กรณีเป็นตาราง (csv, xlsx)
         if (
             file_format in ["csv", "xlsx"]
             and st.session_state.get("analysis_result_table") is not None
         ):
             raw_data = st.session_state["analysis_result_table"]
 
-            # 🧠 ตรวจสอบรูปแบบข้อมูลและสร้าง DataFrame
             if isinstance(raw_data, list):
-                if all(isinstance(item, list) for item in raw_data):
-                    # ⛳️ list of list → แยก header กับข้อมูล
-                    if len(raw_data) >= 2:
-                        header = raw_data[0]
-                        rows = raw_data[1:]
-                        df = pd.DataFrame(rows, columns=header)
-                    else:
-                        st.warning("⚠️ ไม่มีข้อมูลให้แสดง")
-                        return
-                elif all(isinstance(item, dict) for item in raw_data):
-                    df = pd.DataFrame(raw_data)
+                if len(raw_data) >= 2:
+                    header = raw_data[0]
+                    rows = raw_data[1:]
+                    df = pd.DataFrame(rows, columns=header)
                 else:
-                    st.warning(
-                        "⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)"
-                    )
+                    st.warning("⚠️ ไม่มีข้อมูลให้แสดง")
                     return
+            elif all(isinstance(item, dict) for item in raw_data):
+                df = pd.DataFrame(raw_data)
             else:
-                st.warning("⚠️ ไม่สามารถแปลงข้อมูลเป็นตารางได้")
+                st.warning("⚠️ ไม่รองรับรูปแบบข้อมูลนี้ (ต้องเป็น list of list หรือ list of dict)")
                 return
 
             with st.expander("🔍 แสดงผลลัพธ์แบบตาราง"):
@@ -619,7 +611,6 @@ def show_download_section():
                 )
 
         else:
-            # ▶️ กรณีเป็นข้อความธรรมดา (txt)
             content = st.session_state.get("analysis_result", "")
             if not content.strip():
                 st.warning("⚠️ ไม่มีข้อมูลสำหรับบันทึกเป็นไฟล์ข้อความ")
@@ -632,7 +623,6 @@ def show_download_section():
 
         file_bytes.seek(0)
 
-        # ⬇️ ปุ่มดาวน์โหลด
         st.download_button(
             label="⬇️ ดาวน์โหลดผลลัพธ์",
             data=file_bytes,
@@ -643,9 +633,9 @@ def show_download_section():
 
 ## ============================== เกี่ยวกับไฟล์ ==============================
 
+
 # Reset เมื่อเปลี่ยนหน้า
 def reset_tab(tab_choice, model_choice):
-    # ตรวจจับการเปลี่ยนแท็บหรือโมเดล
     if "tab_last" not in st.session_state:
         st.session_state["tab_last"] = tab_choice
     if "model_last" not in st.session_state:
@@ -673,7 +663,6 @@ def reset_tab(tab_choice, model_choice):
         st.rerun()
 
 def reset_on_button_click():
-    # ตรวจจับการกดปุ่มแล้วรีเฟรช
     if "last_button_pressed" not in st.session_state:
         st.session_state["last_button_pressed"] = None
     if (
