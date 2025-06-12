@@ -137,6 +137,7 @@ if menu == "🖥 หน้าต่างทำงาน":
     st.page_link("pages/Call_Recording_Upload.py", label="🎙️ ระบบ Call Recording Upload")
     st.page_link("pages/Chat_with_AI.py", label="🤖 หน้าต่าง Chat with AI")
     st.page_link("pages/Google_Transcribe.py", label="🌐 Google Transcribe STT")
+    st.page_link("pages/Google_Translate.py", label="🌐 Google Translate")
 # ----------------------------
 # เมนู: ตรวจสอบรายชื่อผู้ใช้งาน
 # ----------------------------
