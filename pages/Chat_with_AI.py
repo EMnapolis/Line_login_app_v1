@@ -457,6 +457,17 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                     {"role": "user", "content": prompt}
                 )
 
+                # ✅ คำสั่งขอไฟล์
+                if prompt.strip().lower() in ["ขอไฟล์", "download", "ขอโหลด", "save file"]:
+                    if not st.session_state.get("analysis_result"):
+                        st.chat_message("assistant").write("⚠️ ยังไม่มีผลลัพธ์ให้ดาวน์โหลด กรุณาถามคำถามก่อน")
+                    else:
+                        st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพธ์ที่ได้จาก AI")
+                        st.session_state["show_download"] = True
+                        show_download_section()
+                    st.stop()  # ❗ หยุดที่นี่ ไม่ต้องให้ AI วิเคราะห์ซ้ำ
+
+                # 🔁 ดำเนินการต่อเมื่อไม่ใช่คำว่า "ขอไฟล์"
                 file_content = st.session_state.get("file_content", "")
                 prompt_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt}"
 
@@ -471,8 +482,9 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         model_choice, base_messages, stream_output
                     )
 
-                reply = result["reply"]
-                raw_json = result["response_json"]
+                reply = result.get("reply", "").strip()
+                if not reply:
+                    reply = "⚠️ ระบบไม่สามารถตอบกลับได้ในขณะนี้ หรือโมเดลส่งข้อความว่างกลับมา"
 
                 st.session_state["chat_all_in_one"].append(
                     {"role": "assistant", "content": reply}
@@ -487,7 +499,7 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                         "prompt_tokens": result["prompt_tokens"],
                         "completion_tokens": result["completion_tokens"],
                         "total_tokens": result["total_tokens"],
-                        "response_json": raw_json,
+                        "response_json": result["response_json"],
                     }
                 ]
 

@@ -53,18 +53,32 @@ def parse_llama_stream_response(res):
     raw_chunks = []
     decoder = json.JSONDecoder()
 
-    for line in res.iter_lines():
-        if line:
-            try:
-                line_str = line.decode("utf-8").strip()
-                while line_str:
-                    obj, idx = decoder.raw_decode(line_str)
-                    raw_chunks.append(obj)
-                    reply += obj.get("response", "")
-                    line_str = line_str[idx:].lstrip()
-            except Exception as e:
-                print("❌ Error decoding JSON chunk:", e)
-                continue
+    try:
+        for line in res.iter_lines():
+            if line:
+                try:
+                    line_str = line.decode("utf-8").strip()
+                    while line_str:
+                        obj, idx = decoder.raw_decode(line_str)
+                        raw_chunks.append(obj)
+                        reply += obj.get("response", "")
+                        line_str = line_str[idx:].lstrip()
+                except Exception as e:
+                    print("❌ Error decoding JSON chunk:", e)
+                    continue
+    except Exception as e:
+        print("❌ Error reading response stream:", e)
+
+    # ✅ ตรวจสอบกรณีที่ไม่มีคำตอบ
+    if not reply.strip():
+        reply = "⚠️ โมเดลไม่สามารถสร้างข้อความตอบกลับได้ หรือไม่มีข้อมูลจากการ stream"
+        raw_chunks.append(
+            {
+                "response": "",
+                "error": "empty or invalid stream",
+                "fallback_message": reply,
+            }
+        )
 
     return reply, {"chunks": raw_chunks, "full_reply": reply}
 
@@ -193,8 +207,14 @@ def display_ai_response_info(model_choice, base_messages, stream_output):
     end_time = time.time()
     duration = round(end_time - start_time, 2)
 
-    reply = result["reply"]
-    stream_output.markdown(reply)
+    reply = result.get("reply", "").strip()
+
+    # ✅ เช็คกรณีที่ไม่มีคำตอบจาก AI
+    if not reply:
+        reply = "⚠️ ระบบไม่สามารถตอบคำถามนี้ได้ในขณะนี้ หรือได้รับข้อความว่างจากโมเดล"
+        stream_output.markdown(reply)
+    else:
+        stream_output.markdown(reply)
 
     st.caption(
         f"📌 Model used: `{model_choice}` | "
@@ -203,6 +223,8 @@ def display_ai_response_info(model_choice, base_messages, stream_output):
         f"⏱️ Time taken: {duration} seconds"
     )
 
+    # ✅ บันทึกข้อความที่ update แล้วกลับไปให้ปลอดภัย
+    result["reply"] = reply
     return result
 
 
