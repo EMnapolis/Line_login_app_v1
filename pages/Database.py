@@ -1,4 +1,3 @@
-# pages/Database.py
 import os
 import sqlite3
 import pandas as pd
@@ -6,6 +5,7 @@ import streamlit as st
 import tiktoken
 import altair as alt
 from utility_chat import *
+from utility_ai import *
 
 DB_PATH = "data/sqdata.db"
 
@@ -24,16 +24,6 @@ if DEBUG:
 if "role" not in st.session_state or st.session_state["role"] != "super admin":
     st.error("⛔️ คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะ super admin เท่านั้น)")
     st.stop()
-
-
-# 🔢 Token Counter
-def count_tokens(text, model="gpt-4o"):
-    try:
-        enc = tiktoken.encoding_for_model(model)
-    except:
-        enc = tiktoken.get_encoding("cl100k_base")
-    return len(enc.encode(text or ""))
-
 
 # 📥 Fetch table data
 def fetch_table(table_name):
@@ -64,11 +54,10 @@ def fetch_table(table_name):
 
 
 # 📊 Token Usage Summary
-def summarize_token_usage(user_id=None):
-    from utility_chat import init_db
-
+def summarize_token_usage(user_id=None, default_quota=1_000_000):
     conn, cursor = init_db()
 
+    # ✅ โหลดรายการการใช้ token
     query = """
         SELECT user_id, model,
                SUM(prompt_tokens) AS prompt_tokens,
@@ -97,8 +86,44 @@ def summarize_token_usage(user_id=None):
             "total_tokens",
         ],
     )
-    st.dataframe(df, use_container_width=True)
 
+    # ✅ รวม total token ที่ใช้จริงต่อ user
+    usage_df = df.groupby("user_id", as_index=False)["total_tokens"].sum()
+    usage_df = usage_df.rename(columns={"total_tokens": "รวม Token ที่ใช้"})
+
+    # ✅ ดึง quota override จาก token_usage (ใช้ row ล่าสุดของแต่ละ user ที่มี quota_override)
+    cursor.execute(
+        """
+        SELECT user_id, quota_override
+        FROM token_usage
+        WHERE quota_override IS NOT NULL
+        AND id IN (
+            SELECT MAX(id) FROM token_usage
+            WHERE quota_override IS NOT NULL
+            GROUP BY user_id
+        )
+    """
+    )
+    quota_rows = cursor.fetchall()
+    quota_dict = {uid: quota for uid, quota in quota_rows}
+
+    # ✅ คำนวณโควตา → คงเหลือ → เปอร์เซ็นต์
+    def get_quota(uid):
+        return quota_dict.get(uid, default_quota)
+
+    usage_df["โควตา"] = usage_df["user_id"].apply(get_quota)
+    usage_df["Token คงเหลือ"] = usage_df.apply(
+        lambda row: max(row["โควตา"] - row["รวม Token ที่ใช้"], 0), axis=1
+    )
+    usage_df["% ใช้ไปแล้ว"] = (usage_df["รวม Token ที่ใช้"] / usage_df["โควตา"] * 100).round(
+        2
+    )
+
+    # ✅ แสดงตารางและกราฟ
+    st.markdown("### 📋 ตารางรวม Token ต่อผู้ใช้")
+    st.dataframe(usage_df, use_container_width=True)
+
+    # 🔽 กราฟ token usage ตามโมเดล
     pivoted = (
         df.pivot(index="user_id", columns="model", values="total_tokens")
         .fillna(0)
@@ -108,6 +133,7 @@ def summarize_token_usage(user_id=None):
         id_vars=["user_id"], var_name="model", value_name="total_tokens"
     )
 
+    st.markdown("### 📊 กราฟการใช้ Token ตามโมเดล")
     chart = (
         alt.Chart(melted)
         .mark_bar()
@@ -118,9 +144,7 @@ def summarize_token_usage(user_id=None):
             tooltip=["user_id", "model", "total_tokens"],
         )
     )
-
     st.altair_chart(chart, use_container_width=True)
-
 
 # 🗂 Table list
 TABLES = {
@@ -133,7 +157,9 @@ TABLES = {
 }
 
 # 🧭 Sidebar menu
-menu = st.sidebar.radio("เมนู", ["Backup/Restore db", "📊 ข้อมูลจากฐานข้อมูล"])
+menu = st.sidebar.radio(
+    "เมนู", ["📊 ข้อมูลจากฐานข้อมูล", "ตรวจสอบ/จัดการ Token", "Backup/Restore db"]
+)
 
 # 📊 Table viewer
 if menu == "📊 ข้อมูลจากฐานข้อมูล":
@@ -182,6 +208,57 @@ if menu == "📊 ข้อมูลจากฐานข้อมูล":
             file_name=f"{table_name}.csv",
             mime="text/csv",
         )
+
+# ✅ Token adjustment UI
+# ✅ ส่วนที่ต้องแก้ใน Token Adjustment UI: ปรับให้บันทึก quota_override ลงใน DB
+
+elif menu == "ตรวจสอบ/จัดการ Token":
+    st.header("🛠 จัดการ Token ของผู้ใช้")
+
+    conn, cursor = init_db()
+
+    # 1. ดึง user_id ที่เคยบนใน token_usage
+    cursor.execute("SELECT DISTINCT user_id FROM token_usage ORDER BY user_id")
+    user_ids = [row[0] for row in cursor.fetchall()]
+
+    st.subheader("🌟 กำหนดโควตา Token")
+    selected_quota_user = st.selectbox(
+        "เลือกผู้ใช้ที่ต้องการตั้งโควตา",
+        user_ids,
+        key="quota_user_selectbox",
+    )
+
+    new_quota = st.number_input(
+        "🔄 กำหนด quota ใหม่ (ใส่จำนวนใหม่หรือลดก็ได้)",
+        min_value=0,
+        value=1_000_000,
+        step=100_000,
+    )
+
+    if st.button("✅ บันทึก quota ใหม่ใหม่"):
+        try:
+            now = pd.Timestamp.now().isoformat()
+            cursor.execute(
+                """
+                INSERT INTO token_usage (user_id, model, prompt_tokens, completion_tokens, total_tokens, quota_override, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    selected_quota_user,
+                    "quota",  # model = quota
+                    0,
+                    0,
+                    0,
+                    new_quota,
+                    now,
+                ),
+            )
+            conn.commit()
+            st.success(
+                f"🌟 ปรับ quota ใหม่เป็น {new_quota:,} tokens ให้ `{selected_quota_user}` สำเร็จ"
+            )
+        except Exception as e:
+            st.error(f"❌ เกิดข้อผิด: {e}")
 
     st.markdown("---")
     with st.expander("📊 รวม Token Usage Summary"):

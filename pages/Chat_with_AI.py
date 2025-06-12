@@ -1,6 +1,7 @@
 # page/chat_with_ai.py
 from utility_chat import *  # ทุกอย่างจากไฟล์ utility.py
 from utility_ai import *
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 # เชื่อมต่อ SQLite
 conn, cursor = init_db()
@@ -36,9 +37,9 @@ DEFAULT_SYSTEM_PROMPT = "คุณคือผู้ช่วยที่สา�
 # ========== ตั้งค่าหน้า Streamlit ==========
 CHAT_TOKEN_VL = os.getenv("CHAT_TOKEN") or "Empty"  # Set ตัวแปร chat_token_vl
 
-# ========== Role ==========
+# ========== Role + User ==========
 role = st.session_state.get("Role", "")
-
+current_user = st.session_state.get("user_id", "")
 # ----------------------------
 # ⚙️ Debug Mode Configuration
 # ----------------------------
@@ -74,6 +75,75 @@ with st.sidebar:
     if st.button("⛔ หยุดการทำงาน", key="stop_button_sidebar"):
         st.session_state["stop_chat"] = True
         st.warning("🛑 หยุดการทำงานของ AI แล้ว")
+
+    # ======= ดู Token ที่ใช้แต่ละคน =======
+    st.markdown("---")
+    with st.expander("📊 Token ที่ใช้และคงเหลือของคุณ", expanded=False):
+        from utility_chat import init_db
+
+        conn, cursor = init_db()
+
+        # 🔄 ดึงรวม token ที่ใช้ต่อ user
+        cursor.execute(
+            """
+            SELECT user_id, SUM(total_tokens) as total
+            FROM token_usage
+            GROUP BY user_id
+            """
+        )
+        rows = cursor.fetchall()
+        df = pd.DataFrame(rows, columns=["user_id", "รวม Token ที่ใช้"])
+
+        # 🧠 ระบุผู้ใช้งานปัจจุบัน
+        current_user = st.session_state.get("user_id", "")
+
+        # 🔍 ดึง quota override ล่าสุดจาก DB สำหรับ user นี้
+        cursor.execute(
+            """
+            SELECT quota_override FROM token_usage
+            WHERE user_id = ?
+            AND quota_override IS NOT NULL
+            ORDER BY id DESC LIMIT 1
+            """,
+            (current_user,),
+        )
+        quota_row = cursor.fetchone()
+        current_quota = (
+            quota_row[0] if quota_row else 1_000_000
+        )  # fallback ถ้าไม่มี quota_override
+
+        # ✅ กรองเฉพาะข้อมูลของ user นี้
+        df = df[df["user_id"] == current_user]
+
+        if df.empty:
+            # 🧾 ถ้าไม่มี record token usage มาก่อน
+            df = pd.DataFrame(
+                [
+                    {
+                        "user_id": current_user,
+                        "รวม Token ที่ใช้": 0,
+                    }
+                ]
+            )
+
+        # ✅ คำนวณข้อมูลที่เหลือ
+        df["โควตา Token"] = current_quota
+        df["Token คงเหลือ"] = df["โควตา Token"] - df["รวม Token ที่ใช้"]
+        df["% ที่ใช้แล้ว"] = (df["รวม Token ที่ใช้"] / df["โควตา Token"] * 100).round(2)
+
+        # ✅ แสดงผลแบบรายบรรทัด
+        for _, row in df.iterrows():
+            st.markdown(
+                f"""
+                👤 `User ID`: `{row["user_id"]}`  
+                🔢 **รวม Token ที่ใช้**: `{row["รวม Token ที่ใช้"]:,}`  
+                🎯 **โควตา Token**: `{row["โควตา Token"]:,}`  
+                ✅ **Token คงเหลือ**: `{row["Token คงเหลือ"]:,}`  
+                📈 ใช้ไปแล้ว: `{row["% ที่ใช้แล้ว"]}%`  
+                ---
+                """
+            )
+
 
 # TODO เลือกโมเดล (เฉพาะในแชท)
 # ==== ดึงรายชื่อโมเดลจาก Ollama ====
@@ -122,6 +192,29 @@ if st.button("🆕 เริ่มต้นบทสนทนาใหม่"):
 reset_tab(tab_choice, model_choice)
 reset_on_button_click()
 # ---------------
+# อ่านจำนวน token ที่ใช้แล้วจากฐานข้อมูล
+cursor.execute(
+    """
+    SELECT SUM(total_tokens) FROM token_usage WHERE user_id = ?
+""",
+    (current_user,),
+)
+row = cursor.fetchone()
+used_token = row[0] or 0  # หากยังไม่เคยใช้เลย row[0] จะเป็น None
+
+# กำหนดโควต้าสำหรับผู้ใช้ทั่วไป
+DEFAULT_QUOTA = 1_000_000
+
+# ❌ ถ้าเกินโควต้า และไม่ใช่ admin/super admin → หยุดใช้งาน
+if used_token >= DEFAULT_QUOTA and role not in ["admin", "super admin"]:
+    st.error(
+        f"""
+        ❌ คุณใช้ Token เกินโควต้าที่กำหนดแล้ว  
+        🔢 ใช้ไป: `{used_token:,}` จากโควต้า `{DEFAULT_QUOTA:,}` Tokens  
+        🛑 กรุณาติดต่อผู้ดูแลระบบเพื่อขอเพิ่มโควต้า หรือรอรอบใหม่
+        """
+    )
+    st.stop()
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
@@ -283,6 +376,9 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 st.code(selected_prompt)
 
             st.session_state.setdefault("chat_all_in_one", [])
+            st.session_state.setdefault("messages_prompt", [])
+            st.session_state.setdefault("messages_gpt", [])
+
             for msg in st.session_state["chat_all_in_one"]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
@@ -317,27 +413,25 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
                 if st.button("🔍 วิเคราะห์ไฟล์ด้วย Prompt ที่เลือก"):
                     try:
-                        # เตรียมข้อมูลสำหรับส่งไปยังโมเดล
                         file_content = st.session_state.get("file_content", "")
                         full_input = f"คำสั่ง:{selected_prompt} เนื้อหาไฟล์:{file_content}"
-                        system_prompt = selected_prompt
-
                         base_messages = [
-                            {"role": "system", "content": system_prompt},
+                            {"role": "system", "content": selected_prompt},
                             {"role": "user", "content": full_input},
                         ]
 
-                        start_time = time.time()
                         with st.chat_message("assistant"):
                             stream_output = st.empty()
                             result = display_ai_response_info(
                                 model_choice, base_messages, stream_output
                             )
 
-                        # จัดเก็บผลลัพธ์ใน session_state
                         reply = result["reply"]
                         raw_json = result["response_json"]
-                        st.session_state["chat_all_in_one"].append({"role": "assistant", "content": reply})
+
+                        st.session_state["chat_all_in_one"].append(
+                            {"role": "assistant", "content": reply}
+                        )
                         st.session_state["analysis_result"] = reply
                         st.session_state["show_download"] = False
 
@@ -352,23 +446,23 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             }
                         ]
 
-                        # ✅ 1. บันทึกลง DB และรับ conversation_id กลับมา
                         conv_id = save_conversation_if_ready(
                             conn,
                             cursor,
-                            messages_key="messages_prompt",
-                            source=model_choice,
-                            prompt_tokens=result["prompt_tokens"],
-                            completion_tokens=result["completion_tokens"],
-                            total_tokens=result["total_tokens"],
+                            "messages_prompt",
+                            model_choice,
+                            result["prompt_tokens"],
+                            result["completion_tokens"],
+                            result["total_tokens"],
                         )
 
-                        # ✅ 2. ถ้ายังไม่มี title ให้สร้างและบันทึก
                         if "conversation_title" not in st.session_state:
                             from utility_ai import generate_title_from_conversation
-                            title = generate_title_from_conversation(st.session_state["messages_prompt"])
-                            st.session_state["conversation_title"] = title
 
+                            title = generate_title_from_conversation(
+                                st.session_state["messages_prompt"]
+                            )
+                            st.session_state["conversation_title"] = title
                             if conv_id:
                                 try:
                                     cursor.execute(
@@ -378,11 +472,9 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                                     conn.commit()
                                 except Exception as e:
                                     st.warning(f"⚠️ ไม่สามารถบันทึก title ได้: {e}")
-
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาด: {e}")
 
-            # ====== คุยต่อ ======
             if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
                 st.chat_message("user").write(prompt)
                 st.session_state["chat_all_in_one"].append(
@@ -392,18 +484,16 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 if prompt.strip() == "ขอไฟล์" or (
                     "save" in prompt.lower() and st.session_state.get("analysis_result")
                 ):
-                    st.chat_message("assistant").write("📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์")
+                    st.chat_message("assistant").write(
+                        "📦 คลิกด้านล่างเพื่อดาวน์โหลดไฟล์ผลลัพธ์"
+                    )
                     st.session_state["show_download"] = True
                 else:
                     try:
                         file_content = st.session_state.get("file_content", "")
                         full_input = f"คำสั่ง:{selected_prompt} คำถามเพิ่มเติม:{prompt} เนื้อหาไฟล์:{file_content}"
-
                         base_messages = [
-                            {
-                                "role": "system",
-                                "content": selected_prompt,
-                            },
+                            {"role": "system", "content": selected_prompt},
                             {"role": "user", "content": full_input},
                         ]
 
@@ -415,9 +505,6 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
 
                         reply = result["reply"]
                         raw_json = result["response_json"]
-                        prompt_tokens = result["prompt_tokens"]
-                        completion_tokens = result["completion_tokens"]
-                        total_tokens = result["total_tokens"]
 
                         st.session_state["chat_all_in_one"].append(
                             {"role": "assistant", "content": reply}
@@ -429,38 +516,41 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                             {
                                 "role": "assistant",
                                 "content": reply,
-                                "prompt_tokens": prompt_tokens,
-                                "completion_tokens": completion_tokens,
-                                "total_tokens": total_tokens,
+                                "prompt_tokens": result["prompt_tokens"],
+                                "completion_tokens": result["completion_tokens"],
+                                "total_tokens": result["total_tokens"],
                                 "response_json": raw_json,
                             }
                         ]
-                        save_conversation_if_ready(
+
+                        conv_id = save_conversation_if_ready(
                             conn,
                             cursor,
                             "messages_gpt",
                             model_choice,
-                            prompt_tokens=prompt_tokens,
-                            completion_tokens=completion_tokens,
-                            total_tokens=total_tokens,
+                            result["prompt_tokens"],
+                            result["completion_tokens"],
+                            result["total_tokens"],
                         )
+
+                        if "conversation_title" not in st.session_state:
+                            from utility_ai import generate_title_from_conversation
+
+                            title = generate_title_from_conversation(
+                                st.session_state["messages_gpt"]
+                            )
+                            st.session_state["conversation_title"] = title
+                            if conv_id:
+                                try:
+                                    cursor.execute(
+                                        "UPDATE conversations SET title = ? WHERE id = ?",
+                                        (title, conv_id),
+                                    )
+                                    conn.commit()
+                                except Exception as e:
+                                    st.warning(f"⚠️ ไม่สามารถบันทึก title ได้: {e}")
                     except Exception as e:
                         st.error(f"Error: {e}")
-                    if "conversation_title" not in st.session_state:
-                        from utility_ai import generate_title_from_conversation
-
-                        title = generate_title_from_conversation(st.session_state["messages_gpt"])
-                        st.session_state["conversation_title"] = title
-
-                        # ✅ บันทึกชื่อบทสนทนาเข้า SQLite (ควรมีการตรวจสอบ conv_id ด้วย)
-                        try:
-                            cursor.execute(
-                                "UPDATE conversations SET title = ? WHERE id = (SELECT MAX(id) FROM conversations)",
-                                (title,),
-                            )
-                            conn.commit()
-                        except Exception as e:
-                            st.warning(f"⚠️ ไม่สามารถบันทึก title ได้: {e}")
             show_download_section()
         else:
             st.warning("⚠️ ยังไม่มี Prompt กรุณาเพิ่มที่แท็บ '✨ บันทึก / จัดการ Prompt'")

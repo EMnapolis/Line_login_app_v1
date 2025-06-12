@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS token_usage (
     prompt_tokens INTEGER,
     completion_tokens INTEGER,
     total_tokens INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    quota_override INTEGER,
+    created_at TEXT DEFAULT (DATETIME('now', '+7 hours'))
 );
 
 -- ===========================================

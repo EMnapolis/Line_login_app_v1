@@ -24,166 +24,161 @@ OLLAMA_SERVER_URL = os.getenv("OLLAMA_SERVER_URL")
 
 # ========== ฟังก์ชันนับ Token ==========
 def count_tokens(text, model="gpt-4o"):
-	try:
-		encoding = tiktoken.encoding_for_model(model)
-	except Exception:
-		encoding = tiktoken.get_encoding("cl100k_base")
-	return len(encoding.encode(text))
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except Exception:
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
 
 def estimate_tokens(text: str, model: str = None) -> int:
-	words = len(text.split())
-	return int(words / 0.75)
+    words = len(text.split())
+    return int(words / 0.75)
 
 
 # ========== รวมข้อความจาก stream ของ LLaMA ==========
 def parse_llama_stream_response(res):
-	import json
+    import json
 
-	reply = ""
-	raw_chunks = []
-	decoder = json.JSONDecoder()
+    reply = ""
+    raw_chunks = []
+    decoder = json.JSONDecoder()
 
-	for line in res.iter_lines():
-		if line:
-			try:
-				line_str = line.decode("utf-8").strip()
+    for line in res.iter_lines():
+        if line:
+            try:
+                line_str = line.decode("utf-8").strip()
 
-				# กรณีมีหลาย JSON object ต่อบรรทัด
-				while line_str:
-					obj, idx = decoder.raw_decode(line_str)
-					raw_chunks.append(obj)
-					reply += obj.get("response", "")
-					line_str = line_str[idx:].lstrip()
+                # กรณีมีหลาย JSON object ต่อบรรทัด
+                while line_str:
+                    obj, idx = decoder.raw_decode(line_str)
+                    raw_chunks.append(obj)
+                    reply += obj.get("response", "")
+                    line_str = line_str[idx:].lstrip()
 
-			except Exception as e:
-				print("❌ Error decoding JSON chunk:", e)
-				continue
+            except Exception as e:
+                print("❌ Error decoding JSON chunk:", e)
+                continue
 
-	return reply, {"chunks": raw_chunks, "full_reply": reply}
+    return reply, {"chunks": raw_chunks, "full_reply": reply}
 
 
 # ========== ฟังก์ชันเรียกโมเดลตามชื่อ ==========
 def stream_response_by_model(model_name, messages, stream_output):
-	"""
-	รองรับ GPT (OpenAI) และ LLM Local (เช่น LLaMA ผ่าน Ollama)
-	คืนค่า dict พร้อมข้อมูลบทสนทนาและ token usage
-	"""
-	reply = ""
-	raw_json = {}
-	prompt_tokens = 0
-	completion_tokens = 0
-	total_tokens = 0
+    """
+    รองรับ GPT (OpenAI), Ollama (LLaMA/Mistral/etc.), และ fallback
+    คืนค่า dict พร้อมข้อมูลบทสนทนาและ token usage
+    """
+    import json, os, requests
+    from openai import OpenAI
 
-	if model_name.startswith("gpt-"):
-		client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-		response = client.chat.completions.create(
-			model=model_name,
-			messages=messages,
-			stream=True,
-		)
+    reply = ""
+    raw_json = {}
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
 
-		chunks = []
-		for chunk in response:
-			if st.session_state.get("stop_chat", False):
-				stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
-				break  # 💥 หยุดตอบทันที
+    # ========== GPT MODELS ==========
+    if model_name.startswith("gpt-"):
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            stream=True,
+        )
 
-			chunks.append(chunk.model_dump())
-			if chunk.choices and chunk.choices[0].delta.content:
-				word = chunk.choices[0].delta.content
-				reply += word
-				stream_output.markdown(reply + "▌", unsafe_allow_html=True)
+        chunks = []
+        for chunk in response:
+            if st.session_state.get("stop_chat", False):
+                stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
+                break
+            chunks.append(chunk.model_dump())
+            if chunk.choices and chunk.choices[0].delta.content:
+                word = chunk.choices[0].delta.content
+                reply += word
+                stream_output.markdown(reply + "▌", unsafe_allow_html=True)
 
-		stream_output.markdown(reply)
-		st.session_state["stop_chat"] = False
+        stream_output.markdown(reply)
+        st.session_state["stop_chat"] = False
 
-		raw_json = {
-			"model": model_name,
-			"chunks": chunks,
-			"full_reply": reply,
-		}
+        raw_json = {
+            "model": model_name,
+            "chunks": chunks,
+            "full_reply": reply,
+        }
 
-		prompt_tokens = sum(
-			count_tokens(m["content"], model=model_name) for m in messages
-		)
-		completion_tokens = count_tokens(reply, model=model_name)
-		total_tokens = prompt_tokens + completion_tokens
-	# ===== ollama =====
-	elif model_name.startswith(
-		("llama", "mistral", "phi", "gemma")):
-		llama_server = (
-			os.getenv("OLLAMA_SERVER_API")
-		)  # ✅ ปลอดภัย fallback
-		full_prompt = (
-			"\n".join([f"{m['role']}: {m['content']}" for m in messages])
-			+ "\nassistant:"
-		)
-		try:
-			res = requests.post(
-				llama_server,
-				json={"model": model_name, "prompt": full_prompt, "stream": True},
-				stream=True,
-			)
+        prompt_tokens = sum(
+            count_tokens(m["content"], model=model_name) for m in messages
+        )
+        completion_tokens = count_tokens(reply, model=model_name)
+        total_tokens = prompt_tokens + completion_tokens
 
-			reply = ""
-			raw_chunks = []
-			decoder = json.JSONDecoder()
+    # ========== OLLAMA MODELS ==========
+    elif True:  # Fallback สำหรับโมเดลใดๆ ที่ไม่ใช่ GPT
+        llama_server = os.getenv(
+            "OLLAMA_SERVER_API", "http://localhost:11434/api/generate"
+        )
+        full_prompt = (
+            "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+            + "\nassistant:"
+        )
 
-			for line in res.iter_lines():
-				if st.session_state.get("stop_chat", False):
-					stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
-					break
-				if line:
-					try:
-						line_str = line.decode("utf-8").strip()
-						while line_str:
-							obj, idx = decoder.raw_decode(line_str)
-							raw_chunks.append(obj)
-							reply += obj.get("response", "")
-							line_str = line_str[idx:].lstrip()
-							stream_output.markdown(reply + "▌", unsafe_allow_html=True)
-					except Exception as e:
-						print("❌ Error decoding JSON chunk:", e)
-			stream_output.markdown(reply)
-			st.session_state["stop_chat"] = False
+        try:
+            res = requests.post(
+                llama_server,
+                json={"model": model_name, "prompt": full_prompt, "stream": True},
+                stream=True,
+            )
 
-			raw_json = {
-				"model": model_name,
-				"chunks": raw_chunks,
-				"full_reply": reply,
-			}
+            reply = ""
+            raw_chunks = []
+            decoder = json.JSONDecoder()
 
-			prompt_tokens = estimate_tokens(full_prompt)
-			completion_tokens = estimate_tokens(reply)
-			total_tokens = prompt_tokens + completion_tokens
+            for line in res.iter_lines():
+                if st.session_state.get("stop_chat", False):
+                    stream_output.markdown("🛑 หยุดแสดงผลแล้ว")
+                    break
+                if line:
+                    try:
+                        line_str = line.decode("utf-8").strip()
+                        while line_str:
+                            obj, idx = decoder.raw_decode(line_str)
+                            raw_chunks.append(obj)
+                            reply += obj.get("response", "")
+                            line_str = line_str[idx:].lstrip()
+                            stream_output.markdown(reply + "▌", unsafe_allow_html=True)
+                    except Exception as e:
+                        print("❌ Error decoding JSON chunk:", e)
 
-		except Exception as e:
-			stream_output.markdown(f"❌ ไม่สามารถเชื่อมต่อกับ Ollama ได้: {e}")
-			return {
-				"reply": "",
-				"prompt_tokens": 0,
-				"completion_tokens": 0,
-				"total_tokens": 0,
-				"response_json": "{}",
-			}
+            stream_output.markdown(reply)
+            st.session_state["stop_chat"] = False
 
-	else:
-		stream_output.markdown("❌ ไม่รองรับโมเดลนี้")
-		return {
-			"reply": "",
-			"prompt_tokens": 0,
-			"completion_tokens": 0,
-			"total_tokens": 0,
-			"response_json": "{}",
-		}
+            raw_json = {
+                "model": model_name,
+                "chunks": raw_chunks,
+                "full_reply": reply,
+            }
 
-	return {
-		"reply": reply,
-		"prompt_tokens": prompt_tokens,
-		"completion_tokens": completion_tokens,
-		"total_tokens": total_tokens,
-		"response_json": json.dumps(raw_json, ensure_ascii=False),
-	}
+            prompt_tokens = estimate_tokens(full_prompt)
+            completion_tokens = estimate_tokens(reply)
+            total_tokens = prompt_tokens + completion_tokens
+
+        except Exception as e:
+            stream_output.markdown(f"❌ ไม่สามารถเชื่อมต่อกับ Ollama ได้: {e}")
+            return {
+                "reply": "",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "response_json": "{}",
+            }
+
+    return {
+        "reply": reply,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "response_json": json.dumps(raw_json, ensure_ascii=False),
+    }
 
 
 def get_ollama_models():
