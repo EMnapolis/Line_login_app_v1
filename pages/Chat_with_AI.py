@@ -164,7 +164,6 @@ with st.sidebar:
                 """
             )
 
-
 # TODO เลือกโมเดล (เฉพาะในแชท)
 # ==== ดึงรายชื่อโมเดลจาก Ollama ====
 ollama_models = (
