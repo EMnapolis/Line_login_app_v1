@@ -211,17 +211,23 @@ used_token = row[0] or 0  # หากยังไม่เคยใช้เล�
 check_token_quota()
 # ========== TAB 1: Chat with GPT ==========
 if tab_choice == "💬 สนทนากับ GPT":
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     st.subheader("🤖 สนทนากับ GPT (รองรับไฟล์ประกอบ)")
     st.caption("พิมพ์คำถามทั่วไป หรืออัปโหลดไฟล์เพื่อให้ช่วยวิเคราะห์")
 
     with st.expander("📂 ขยายเพื่ออัปโหลดไฟล์ (txt, csv, xlsx)", expanded=False):
-        uploaded_file = st.file_uploader("📂 อัปโหลดไฟล์ (txt, csv, xlsx)", 
-                                         type=["txt", "csv", "xlsx"],
-                                         accept_multiple_files=True)
+        uploaded_files = st.file_uploader(
+            "📂 อัปโหลดไฟล์ (txt, csv, xlsx)",
+            type=["txt", "csv", "xlsx"],
+            accept_multiple_files=True,
+        )
 
-    if uploaded_file:
+    df = None  # สำหรับวิเคราะห์ไฟล์ตาราง
+    if uploaded_files:
         all_content = ""
-        for uploaded_file in uploaded_file:
+        for uploaded_file in uploaded_files:
             try:
                 file_content = read_uploaded_file(uploaded_file.name, uploaded_file)
                 all_content += f"\n\n### {uploaded_file.name}\n{file_content}"
@@ -234,49 +240,72 @@ if tab_choice == "💬 สนทนากับ GPT":
                 )
                 st.session_state[f"file_{uploaded_file.name}"] = file_content
 
+                # วิเคราะห์ตารางอัตโนมัติ (csv/xlsx) พร้อม fallback
+                if uploaded_file.name.endswith(".csv"):
+                    try:
+                        uploaded_file.seek(0)
+                        df_candidate = pd.read_csv(uploaded_file)
+                        if not df_candidate.empty:
+                            df = df_candidate
+                        else:
+                            st.warning(f"⚠️ ไฟล์ {uploaded_file.name} ไม่มีข้อมูล (Empty)!")
+                    except pd.errors.EmptyDataError:
+                        st.warning(f"⚠️ ไฟล์ {uploaded_file.name} ว่างเปล่า ไม่มีข้อมูล")
+                    except pd.errors.ParserError:
+                        st.warning(
+                            f"⚠️ ไฟล์ {uploaded_file.name} อ่านไม่ได้ อาจไม่มี header หรือใช้ separator ผิด"
+                        )
+                        try:
+                            uploaded_file.seek(0)
+                            df_candidate = pd.read_csv(uploaded_file, header=None)
+                            if not df_candidate.empty:
+                                df = df_candidate
+                            else:
+                                st.warning(f"⚠️ ไม่มีข้อมูลแม้จะใช้ header=None")
+                        except Exception as inner_e:
+                            st.error(f"❌ อ่านแบบไม่มี header ก็ล้มเหลว: {inner_e}")
+
+                elif uploaded_file.name.endswith(".xlsx"):
+                    try:
+                        df = pd.read_excel(uploaded_file)
+                    except Exception as e:
+                        st.error(f"❌ ไม่สามารถอ่าน Excel {uploaded_file.name} ได้: {e}")
+
             except Exception as e:
                 st.error(f"❌ ไม่สามารถอ่านไฟล์ {uploaded_file.name} ได้: {e}")
 
-        # ✅ บันทึกรวมไฟล์ไว้ใช้งานร่วมกับ AI
         st.session_state["file_text"] = all_content
 
-    # ค่าเริ่มต้น
     file_content = st.session_state.get("file_text", "")
     st.session_state.setdefault("chat_all_in_one", [])
 
-    # แสดงบทสนทนาย้อนหลัง
     for msg in st.session_state["chat_all_in_one"]:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    # ช่องพิมพ์คำถาม
     if prompt := st.chat_input("พิมพ์คำถามของคุณ (หรือพิมพ์ว่า 'ขอไฟล์')"):
         token_fn = count_tokens if model_choice.startswith("gpt-") else estimate_tokens
 
-        # เพิ่มข้อความของผู้ใช้พร้อม token_count
         st.chat_message("user").write(prompt)
-        st.session_state["chat_all_in_one"].append(
-            {
-                "role": "user",
-                "content": prompt,
-                # "token_count": token_fn(prompt, model_choice),
-            }
-        )
+        st.session_state["chat_all_in_one"].append({"role": "user", "content": prompt})
 
-        # คำสั่งขอไฟล์
         if prompt.strip() == "ขอไฟล์":
             if not st.session_state.get("analysis_result"):
-                st.chat_message("assistant").write("⚠️ ยังไม่มีผลลัพธ์ให้ดาวน์โหลด กรุณาถามคำถามก่อน")
+                st.chat_message("assistant").write(
+                    "⚠️ ยังไม่มีผลลัพท์ให้ดาวน์โหลด กรุณาถามคำถามก่อน"
+                )
             else:
-                st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพธ์ที่ได้จาก AI")
+                st.chat_message("assistant").write("📦 คลิกเพื่อดาวน์โหลดผลลัพท์ที่ได้จาก AI")
                 st.session_state["show_download"] = True
-
         else:
             try:
-                # สร้าง prompt เต็ม
                 base_messages = [
                     {
                         "role": "system",
-                        "content": "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี",
+                        "content": (
+                            "คุณคือผู้ช่วยที่สามารถตอบคำถามทั่วไป และใช้เนื้อหาจากไฟล์หากมี \n"
+                            "คุณมีตัวแปร df เป็น DataFrame ที่ได้จากไฟล์ที่ผู้ใช้แนบมา \n"
+                            "หากคำถามของผู้ใช้เกี่ยวข้องกับข้อมูลในตาราง กรุณาตอบด้วยโค้ด Python เต็มรูปแบบภายใน code block ```python เพื่อให้ระบบสามารถรันและแสดงกราฟได้ทันที"
+                        ),
                     }
                 ]
                 if file_content:
@@ -290,13 +319,33 @@ if tab_choice == "💬 สนทนากับ GPT":
                         stream_output = st.empty()
                         result = display_ai_response_info(
                             model_choice, base_messages, stream_output
-                    )
+                        )
 
-                # เพิ่มข้อความตอบกลับเข้า history
+                reply_text = result["reply"]
+
+                # ตรวจจับ code block
+                if "```python" in reply_text:
+                    st.markdown("#### 🤖 คำตอบจาก AI:")
+                    st.markdown(reply_text)
+
+                    # แยก code block ออกมาแล้วรัน
+                    try:
+                        code_lines = reply_text.split("```python")[-1].split("```", 1)[
+                            0
+                        ]
+                        exec(
+                            code_lines,
+                            {"df": df, "plt": plt, "sns": sns, "st": st, "pd": pd},
+                        )
+                    except Exception as e:
+                        st.error(f"❌ เกิดข้อผิดพลาดในการรันโค้ด: {e}")
+                else:
+                    st.chat_message("assistant").write(reply_text)
+
                 st.session_state["chat_all_in_one"].append(
                     {
                         "role": "assistant",
-                        "content": result["reply"],
+                        "content": reply_text,
                         "prompt_tokens": result["prompt_tokens"],
                         "completion_tokens": result["completion_tokens"],
                         "total_tokens": result["total_tokens"],
@@ -304,15 +353,13 @@ if tab_choice == "💬 สนทนากับ GPT":
                     }
                 )
 
-                # สำหรับแสดงผล / ดาวน์โหลด
-                st.session_state["analysis_result"] = result["reply"]
+                st.session_state["analysis_result"] = reply_text
                 st.session_state["show_download"] = False
 
-                # เตรียมสำหรับ save DB
                 st.session_state["messages_gpt"] = base_messages + [
                     {
                         "role": "assistant",
-                        "content": result["reply"],
+                        "content": reply_text,
                         "prompt_tokens": result["prompt_tokens"],
                         "completion_tokens": result["completion_tokens"],
                         "total_tokens": result["total_tokens"],
@@ -320,12 +367,11 @@ if tab_choice == "💬 สนทนากับ GPT":
                     }
                 ]
 
-                # บันทึกลง SQLite
                 save_conversation_if_ready(
                     conn,
                     cursor,
-                    messages_key="messages_gpt",         # ✅ ต้องใส่ค่าให้ชัดเจน
-                    source=model_choice,                 # เช่น "gpt-4o" หรือ "llama2:latest"
+                    messages_key="messages_gpt",
+                    source=model_choice,
                     prompt_tokens=result["prompt_tokens"],
                     completion_tokens=result["completion_tokens"],
                     total_tokens=result["total_tokens"],
@@ -337,17 +383,15 @@ if tab_choice == "💬 สนทนากับ GPT":
                     title = generate_title_from_conversation(
                         st.session_state["messages_gpt"]
                     )
-                    st.session_state["conversation_title"] = title  # ใช้ใน UI
-                    save_conversation_if_ready(
-                        cursor, title
-                    )  # ต้องสร้างฟังก์ชันนี้ให้เขียนเข้า DB
+                    st.session_state["conversation_title"] = title
+                    save_conversation_if_ready(cursor, title)
                     conn.commit()
 
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-    # ปุ่มดาวน์โหลดผลลัพธ์
     show_download_section()
+
 
 # ========== Choice 2: เพิ่ม/เลือก Prompt ==========
 elif tab_choice == "🧠 สนทนากับ Prompt":

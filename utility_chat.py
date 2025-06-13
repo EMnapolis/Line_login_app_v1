@@ -17,6 +17,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from charset_normalizer import from_bytes
 from dotenv import load_dotenv
+import matplotlib.pyplot as plt
+import seaborn as sns
 import tiktoken
 import json
 import time
