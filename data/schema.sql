@@ -70,7 +70,16 @@ CREATE TABLE IF NOT EXISTS raw_json (
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 
-
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    model TEXT,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    quota_override INTEGER,
+    created_at TEXT DEFAULT (DATETIME('now', '+7 hours'))
+);
 
 -- ===========================================
 -- Table: sent_records
