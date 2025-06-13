@@ -244,44 +244,81 @@ def check_token_quota():
     current_user = st.session_state.get("user_id", "")
     role = st.session_state.get("role", "").lower()
 
-    # Fetch total token usage
+    # ✅ ดึง display_name จาก session หรือ access_login
+    display_name = st.session_state.get("displayName", "")
+    if not display_name:
+        cursor.execute(
+            "SELECT display_name FROM access_login WHERE user_id = ?", (current_user,)
+        )
+        row = cursor.fetchone()
+        display_name = row[0] if row and row[0] else current_user
+
+    # 🔢 ดึง token usage ที่ใช้ไปแล้ว
     cursor.execute(
         """
         SELECT SUM(total_tokens) FROM token_usage
         WHERE user_id = ?
-    """,
+        """,
         (current_user,),
     )
     used_token = cursor.fetchone()[0] or 0
 
-    # Fetch latest quota override from DB
+    # 📏 ดึง quota override ล่าสุด (ถ้ามี)
     cursor.execute(
         """
         SELECT quota_override FROM token_usage
         WHERE user_id = ? AND quota_override IS NOT NULL
         ORDER BY id DESC LIMIT 1
-    """,
+        """,
         (current_user,),
     )
     quota_row = cursor.fetchone()
-    quota_limit = quota_row[0] if quota_row else 1_000_000  # Default Quota Fallback
+    quota_limit = quota_row[0] if quota_row else 1_000_000  # Default fallback quota
 
-    # Calculate used percentage
+    # 🎯 คำนวณ % ที่ใช้
     percent_used = round((used_token / quota_limit) * 100, 2)
 
-    # Warn when usage exceeds 90%
+    # ⚠️ เตือนถ้าใช้เกิน 90%
     if percent_used >= 90 and used_token < quota_limit:
         st.warning(
-            f"⚠️ You have used {percent_used}% of your tokens.\n"
-            f"🔢 Usage: `{used_token:,}` out of `{quota_limit:,}` tokens.\n"
-            f"🧭 Please plan your usage accordingly."
+            f"⚠️ คุณ `{display_name}` ได้ใช้ Token ไปแล้ว {percent_used}%\n"
+            f"🔢 ใช้ไป: `{used_token:,}` / `{quota_limit:,}` tokens\n"
+            f"🧭 โปรดวางแผนการใช้งานอย่างเหมาะสม"
         )
 
-    # Stop usage if quota exceeded
+    # 🛑 ปิดการใช้งานถ้าเกิน quota
     if used_token >= quota_limit and role not in ["admin", "super admin"]:
         st.error(
-            f"❌ You have exceeded your token quota.\n"
-            f"🔢 Usage: `{used_token:,}` out of `{quota_limit:,}` tokens.\n"
-            f"🛑 Please contact your administrator to request additional quota or wait for the next cycle."
+            f"❌ คุณ `{display_name}` ใช้ Token เกินโควตาแล้ว\n"
+            f"🔢 ใช้ไป: `{used_token:,}` / `{quota_limit:,}` tokens\n"
+            f"🛑 กรุณาติดต่อผู้ดูแลระบบหรือรอรอบถัดไป"
         )
         st.stop()
+
+def plot_grouped_bar(df, group_col, category_col):
+    import plotly.express as px
+    import streamlit as st
+
+    try:
+        grouped_df = (
+            df[[group_col, category_col]]
+            .dropna()
+            .groupby([group_col, category_col])
+            .size()
+            .reset_index(name="จำนวน")
+        )
+
+        fig = px.bar(
+            grouped_df,
+            x=group_col,
+            y="จำนวน",
+            color=category_col,
+            barmode="group",
+            text="จำนวน",
+            title=f"จำนวน '{category_col}' ในแต่ละ '{group_col}'",
+            height=500,
+        )
+        fig.update_layout(xaxis_title=group_col, yaxis_title="จำนวน")
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"❌ สร้างกราฟไม่สำเร็จ: {e}")

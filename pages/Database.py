@@ -1,3 +1,4 @@
+# pages/Database.py
 import os
 import sqlite3
 import pandas as pd
@@ -32,7 +33,19 @@ def fetch_table(table_name):
         return pd.DataFrame()
     try:
         conn = sqlite3.connect(DB_PATH)
-        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+
+        # ✅ เงื่อนไขพิเศษสำหรับตารางที่มี user_id
+        if table_name in {"conversations", "messages", "token_usage", "prompts"}:
+            query = f"""
+                SELECT t.*, a.display_name
+                FROM {table_name} t
+                LEFT JOIN access_login a ON t.user_id = a.user_id
+                ORDER BY t.created_at DESC
+            """
+        else:
+            query = f"SELECT * FROM {table_name}"
+
+        df = pd.read_sql_query(query, conn)
         conn.close()
 
         if table_name == "messages" and "content" in df.columns:
@@ -52,24 +65,25 @@ def fetch_table(table_name):
         st.error(f"❌ SQLite Error: {e}")
         return pd.DataFrame()
 
-
 # 📊 Token Usage Summary
 def summarize_token_usage(user_id=None, default_quota=1_000_000):
     conn, cursor = init_db()
 
-    # ✅ ดึงข้อมูล token usage
+    # ✅ ดึงข้อมูล token usage พร้อมชื่อ display_name
     query = """
-        SELECT user_id, model,
-               SUM(prompt_tokens) AS prompt_tokens,
-               SUM(completion_tokens) AS completion_tokens,
-               SUM(total_tokens) AS total_tokens
-        FROM token_usage
+        SELECT u.user_id, a.display_name, u.model,
+               SUM(u.prompt_tokens), SUM(u.completion_tokens), SUM(u.total_tokens)
+        FROM token_usage u
+        LEFT JOIN access_login a ON u.user_id = a.user_id
     """
+    params = []
+
     if user_id:
-        query += " WHERE user_id = ?"
-        cursor.execute(query + " GROUP BY user_id, model", (user_id,))
-    else:
-        cursor.execute(query + " GROUP BY user_id, model")
+        query += " WHERE u.user_id = ?"
+        params.append(user_id)
+
+    query += " GROUP BY u.user_id, a.display_name, u.model"
+    cursor.execute(query, params)
 
     results = cursor.fetchall()
     if not results:
@@ -80,6 +94,7 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
         results,
         columns=[
             "user_id",
+            "display_name",
             "model",
             "prompt_tokens",
             "completion_tokens",
@@ -87,11 +102,16 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
         ],
     )
 
-    # ✅ รวมยอด token ต่อ user
-    usage_df = df.groupby("user_id", as_index=False)["total_tokens"].sum()
+    # ✅ Fallback: ถ้า display_name ว่าง ให้ใช้ user_id แทน
+    df["display_name"] = df["display_name"].fillna(df["user_id"])
+
+    # ✅ รวมยอด token ต่อ display_name
+    usage_df = df.groupby(["user_id", "display_name"], as_index=False)[
+        "total_tokens"
+    ].sum()
     usage_df = usage_df.rename(columns={"total_tokens": "รวม Token ที่ใช้"})
 
-    # ✅ ดึง quota override จาก record ล่าสุดของแต่ละ user ที่มี quota_override
+    # ✅ ดึง quota override ล่าสุด
     cursor.execute(
         """
         SELECT user_id, quota_override
@@ -107,46 +127,32 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
     quota_rows = cursor.fetchall()
     quota_dict = {uid: quota for uid, quota in quota_rows}
 
-    # ✅ เพิ่มคอลัมน์ quota และ token คงเหลือ
+    # ✅ เพิ่ม quota และการคำนวณ
     usage_df["โควตา Token"] = usage_df["user_id"].apply(
         lambda uid: quota_dict.get(uid, default_quota)
     )
     usage_df["Token คงเหลือ"] = usage_df["โควตา Token"] - usage_df["รวม Token ที่ใช้"]
-    usage_df["% ที่ใช้แล้ว"] = (
+    usage_df["% ใช้ไปแล้ว"] = (
         usage_df["รวม Token ที่ใช้"] / usage_df["โควตา Token"] * 100
     ).round(2)
 
-    # ✅ แสดงผล
-    st.dataframe(usage_df, use_container_width=True)
+    # ✅ แสดงตารางรวม Token ต่อผู้ใช้
+    st.markdown("### 📋 ตารางรวม Token ต่อผู้ใช้")
+    st.dataframe(usage_df.drop(columns=["user_id"]), use_container_width=True)
 
+    # ✅ กราฟ TOP 10
     with st.expander("📊 กราฟรวม Token ที่ใช้ (TOP 10)", expanded=False):
         top10 = usage_df.sort_values(by="รวม Token ที่ใช้", ascending=False).head(10)
-        st.bar_chart(top10.set_index("user_id")["รวม Token ที่ใช้"])
+        st.bar_chart(top10.set_index("display_name")["รวม Token ที่ใช้"])
 
-    # ✅ คำนวณโควตา → คงเหลือ → เปอร์เซ็นต์
-    def get_quota(uid):
-        return quota_dict.get(uid, default_quota)
-
-    usage_df["โควตา"] = usage_df["user_id"].apply(get_quota)
-    usage_df["Token คงเหลือ"] = usage_df.apply(
-        lambda row: max(row["โควตา"] - row["รวม Token ที่ใช้"], 0), axis=1
-    )
-    usage_df["% ใช้ไปแล้ว"] = (usage_df["รวม Token ที่ใช้"] / usage_df["โควตา"] * 100).round(
-        2
-    )
-
-    # ✅ แสดงตารางและกราฟ
-    st.markdown("### 📋 ตารางรวม Token ต่อผู้ใช้")
-    st.dataframe(usage_df, use_container_width=True)
-
-    # 🔽 กราฟ token usage ตามโมเดล
+    # ✅ กราฟ Token usage ตามโมเดล
     pivoted = (
-        df.pivot(index="user_id", columns="model", values="total_tokens")
+        df.pivot(index="display_name", columns="model", values="total_tokens")
         .fillna(0)
         .reset_index()
     )
     melted = pivoted.melt(
-        id_vars=["user_id"], var_name="model", value_name="total_tokens"
+        id_vars=["display_name"], var_name="model", value_name="total_tokens"
     )
 
     st.markdown("### 📊 กราฟการใช้ Token ตามโมเดล")
@@ -154,13 +160,15 @@ def summarize_token_usage(user_id=None, default_quota=1_000_000):
         alt.Chart(melted)
         .mark_bar()
         .encode(
-            x=alt.X("user_id:N", title="ผู้ใช้"),
+            x=alt.X("display_name:N", title="ผู้ใช้"),
             y=alt.Y("total_tokens:Q", title="Token รวม"),
             color=alt.Color("model:N", title="โมเดล"),
-            tooltip=["user_id", "model", "total_tokens"],
+            tooltip=["display_name", "model", "total_tokens"],
         )
     )
     st.altair_chart(chart, use_container_width=True)
+
+    return usage_df
 
 
 # 🗂 Table list
@@ -236,17 +244,25 @@ elif menu == "ตรวจสอบ/จัดการ Token":
     # ────────────────
     st.subheader("🌟 กำหนดโควตา Token")
 
-    cursor.execute("SELECT DISTINCT user_id FROM token_usage ORDER BY user_id")
-    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.execute(
+        """
+        SELECT DISTINCT u.user_id, COALESCE(a.display_name, u.user_id)
+        FROM token_usage u
+        LEFT JOIN access_login a ON u.user_id = a.user_id
+        ORDER BY a.display_name COLLATE NOCASE
+    """
+    )
+    user_options = {f"{row[1]} ({row[0]})": row[0] for row in cursor.fetchall()}
 
-    if not user_ids:
+    if not user_options:
         st.info("⚠️ ยังไม่มีข้อมูลผู้ใช้ในระบบ token_usage")
     else:
-        selected_quota_user = st.selectbox(
+        selected_quota_user_label = st.selectbox(
             "เลือกผู้ใช้ที่ต้องการตั้งโควตา",
-            user_ids,
+            list(user_options.keys()),
             key="quota_user_selectbox",
         )
+        selected_quota_user = user_options[selected_quota_user_label]
 
         new_quota = st.number_input(
             "🔄 กำหนด quota ใหม่ (ใส่จำนวนใหม่หรือลดก็ได้)",
@@ -288,12 +304,24 @@ elif menu == "ตรวจสอบ/จัดการ Token":
     st.markdown("---")
     st.subheader("📅 รายงานการใช้ Token รายวัน")
 
-    # 🔁 refresh user_ids อีกครั้งเผื่อมีการเพิ่มจาก quota ด้านบน
-    user_ids = [r[0] for r in get_token_usage_summary(cursor)]
-    if not user_ids:
+    # 🔁 refresh user list
+    cursor.execute(
+        """
+        SELECT DISTINCT u.user_id, COALESCE(a.display_name, u.user_id)
+        FROM token_usage u
+        LEFT JOIN access_login a ON u.user_id = a.user_id
+        ORDER BY a.display_name COLLATE NOCASE
+    """
+    )
+    daily_user_options = {f"{row[1]} ({row[0]})": row[0] for row in cursor.fetchall()}
+
+    if not daily_user_options:
         st.info("⚠️ ยังไม่มีข้อมูล token usage")
     else:
-        selected_user = st.selectbox("เลือกผู้ใช้", user_ids, key="user_token_daily")
+        selected_user_label = st.selectbox(
+            "เลือกผู้ใช้", list(daily_user_options.keys()), key="user_token_daily"
+        )
+        selected_user = daily_user_options[selected_user_label]
 
         cursor.execute(
             """
@@ -324,22 +352,16 @@ elif menu == "ตรวจสอบ/จัดการ Token":
     if usage_df is not None:
         with st.expander("📈 กราฟรวม Token ที่ใช้ (TOP 10)", expanded=False):
             top10 = usage_df.sort_values(by="รวม Token ที่ใช้", ascending=False).head(10)
-            st.bar_chart(top10.set_index("user_id")["รวม Token ที่ใช้"])
+            st.bar_chart(top10.set_index("display_name")["รวม Token ที่ใช้"])
 
 # 💾 Backup / Restore
 elif menu == "Backup/Restore db":
     st.title("📦 Backup / Restore Database")
     st.warning(
         """
-        ### 🛡️ คำแนะนำสำหรับการสำรองและกู้คืนฐานข้อมูล (Backup / Restore)
-
-        - **โปรดดำเนินการสำรองข้อมูล (Backup)** ก่อนทำการเปลี่ยนแปลงใด ๆ ทุกครั้ง เพื่อป้องกันการสูญหายของข้อมูลในกรณีที่เกิดข้อผิดพลาด
-        - **การกู้คืนข้อมูล (Restore)** จะทำการ *เขียนทับไฟล์ฐานข้อมูลเดิมทันที* โดยไม่สามารถย้อนกลับได้
-        - โปรดตรวจสอบว่าไฟล์ที่นำมา Restore มีความถูกต้อง และเป็นไฟล์ที่ได้รับการตรวจสอบแล้วว่าเชื่อถือได้
-        - แนะนำให้เก็บไฟล์สำรองไว้ในที่ปลอดภัย และตั้งชื่อไฟล์โดยระบุวันเวลาให้ชัดเจน เช่น `backup_2025-06-13.db`
-        - หลังการกู้คืนระบบ อาจต้องทำการรีเฟรชแอปหรือรีสตาร์ทบริการที่เกี่ยวข้องเพื่อให้ข้อมูลใหม่มีผล
-
-        ✅ **การปฏิบัติตามคำแนะนำนี้จะช่วยให้ระบบของคุณมีความปลอดภัย และสามารถกู้คืนได้อย่างมีประสิทธิภาพในยามฉุกเฉิน**
+        ### ℹ️ คำแนะนำการใช้งาน Backup / Restore
+        - สำรองข้อมูลก่อนทุกการเปลี่ยนแปลง
+        - การ Restore จะเขียนทับไฟล์เดิมทันที
         """
     )
     backup1, backup2 = st.columns([1, 1])

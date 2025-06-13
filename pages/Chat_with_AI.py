@@ -151,9 +151,11 @@ with st.sidebar:
 
         # ✅ แสดงผลแบบรายบรรทัด
         for _, row in df.iterrows():
+            display_name = st.session_state.get("displayName") or row["user_id"]
+
             st.markdown(
                 f"""
-                👤 `User ID`: `{row["user_id"]}`  
+                👤 **ผู้ใช้:** `{display_name}`  
                 🔢 **รวม Token ที่ใช้**: `{row["รวม Token ที่ใช้"]:,}`  
                 🎯 **โควตา Token**: `{row["โควตา Token"]:,}`  
                 ✅ **Token คงเหลือ**: `{row["Token คงเหลือ"]:,}`  
