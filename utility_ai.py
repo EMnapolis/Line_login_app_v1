@@ -103,7 +103,6 @@ def stream_response_by_model(model_name, messages, stream_output):
             stream=True,
         )
 
-        # Stream the response
         chunks = []
         for chunk in response:
             if st.session_state.get("stop_chat", False):
@@ -115,11 +114,13 @@ def stream_response_by_model(model_name, messages, stream_output):
                 reply += word
                 stream_output.markdown(reply + "▌", unsafe_allow_html=True)
 
+        if not reply.strip():
+            reply = "⚠️ ระบบไม่สามารถตอบกลับได้ในขณะนี้ หรือโมเดลส่งข้อความว่าง"
         stream_output.markdown(reply)
         st.session_state["stop_chat"] = False
 
         raw_json = {
-            "model": "gpt-4o",
+            "model": model_name,
             "chunks": chunks,
             "full_reply": reply,
         }
@@ -147,15 +148,19 @@ def stream_response_by_model(model_name, messages, stream_output):
                 stream=True,
             )
 
-            # Stream and parse the response
+            # ✅ ใช้แค่ครั้งเดียว
             reply, raw_chunks = parse_llama_stream_response(res)
-            reply += parse_llama_stream_response(res)
+
+            if not reply.strip():
+                reply = "⚠️ โมเดล Ollama ไม่สามารถสร้างข้อความตอบกลับได้ หรือไม่มีข้อมูลจาก stream"
+                raw_chunks["chunks"].append({"warning": "empty response"})
+
             stream_output.markdown(reply)
             st.session_state["stop_chat"] = False
 
             raw_json = {
                 "model": model_name,
-                "chunks": raw_chunks,
+                "chunks": raw_chunks["chunks"],
                 "full_reply": reply,
             }
 
@@ -166,11 +171,11 @@ def stream_response_by_model(model_name, messages, stream_output):
         except Exception as e:
             stream_output.markdown(f"❌ Unable to connect to Ollama: {e}")
             return {
-                "reply": "",
+                "reply": "❌ ไม่สามารถเชื่อมต่อกับ Ollama ได้",
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "total_tokens": 0,
-                "response_json": "{}",
+                "response_json": json.dumps({"error": str(e)}, ensure_ascii=False),
             }
 
     return {

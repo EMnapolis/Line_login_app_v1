@@ -4,17 +4,20 @@
 
 setuptools>=65.5.0
 streamlit>=1.18.0
-requests
-pandas
 openai>=1.3.5
 langchain>=0.1.14
 langchain-community>=0.0.26
-tiktoken
 chromadb>=0.4.24
-python-dotenv
 protobuf==3.20.3
 openpyxl
 google-cloud-speech
 google-auth
 XlsxWriter
+streamlit>=1.25.0
+openai>=1.3.7
+pandas>=1.5.0
+tiktoken>=0.5.1
+charset-normalizer>=3.3.0
+python-dotenv>=1.0.0
+requests>=2.31.0
 #
