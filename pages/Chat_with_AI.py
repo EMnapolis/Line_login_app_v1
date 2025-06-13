@@ -286,9 +286,10 @@ if tab_choice == "💬 สนทนากับ GPT":
                 base_messages.extend(st.session_state["chat_all_in_one"])
 
                 with st.chat_message("assistant"):
-                    stream_output = st.empty()
-                    result = display_ai_response_info(
-                        model_choice, base_messages, stream_output
+                    with st.spinner("🤖 AI กำลังประมวลผลคำถามของคุณ..."):
+                        stream_output = st.empty()
+                        result = display_ai_response_info(
+                            model_choice, base_messages, stream_output
                     )
 
                 # เพิ่มข้อความตอบกลับเข้า history
@@ -415,9 +416,10 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                     ]
 
                     with st.chat_message("assistant"):
-                        stream_output = st.empty()
-                        result = display_ai_response_info(
-                            model_choice, base_messages, stream_output
+                        with st.spinner("🤖 AI กำลังประมวลผลคำถามของคุณ..."):
+                            stream_output = st.empty()
+                            result = display_ai_response_info(
+                                model_choice, base_messages, stream_output
                         )
 
                     reply = result["reply"]
@@ -477,9 +479,10 @@ elif tab_choice == "🧠 สนทนากับ Prompt":
                 ]
 
                 with st.chat_message("assistant"):
-                    stream_output = st.empty()
-                    result = display_ai_response_info(
-                        model_choice, base_messages, stream_output
+                    with st.spinner("🤖 AI กำลังประมวลผลคำถามของคุณ..."):
+                        stream_output = st.empty()
+                        result = display_ai_response_info(
+                            model_choice, base_messages, stream_output
                     )
 
                 reply = result.get("reply", "").strip()
@@ -678,11 +681,12 @@ elif tab_choice == "📜 ประวัติการสนทนา":
 
             try:
                 with st.chat_message("assistant"):
-                    stream_output = st.empty()
-                    result = stream_response_by_model(
-                        model_choice,
-                        st.session_state["messages_history"],
-                        stream_output,
+                    with st.spinner("🤖 AI กำลังประมวลผลคำถามของคุณ..."):
+                        stream_output = st.empty()
+                        result = stream_response_by_model(
+                            model_choice,
+                            st.session_state["messages_history"],
+                            stream_output,
                     )
                     reply = result["reply"]
                     stream_output.markdown(reply)
